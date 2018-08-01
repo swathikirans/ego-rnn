@@ -1,4 +1,4 @@
-# Object-centric Attention for Egocentric Activity Recognition
+# Attention is All We Need: Nailing Down Object-centric Attention for Egocentric Activity Recognition
 
 The git contains the source code associated with our BMVC 2018 paper:
 "Attention is All We Need: Nailing Down Object-centric Attention for Egocentric Activity Recognition"
