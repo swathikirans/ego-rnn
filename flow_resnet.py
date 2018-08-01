@@ -184,22 +184,9 @@ def flow_resnet18(pretrained=False, channels=20, num_classes=61):
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
     model = ResNet(BasicBlock, [2, 2, 2, 2], channels=channels, num_classes=num_classes)
-    # if pretrained:
-    #     # model.load_state_dict(model_zoo.load_url(model_urls['resnet18']))
-    #     in_channels = 20
-    #     pretrained_dict = model_zoo.load_url(model_urls['resnet18'])
-    #     model_dict = model.state_dict()
-    #
-    #     new_pretrained_dict = change_key_names(pretrained_dict, in_channels)
-    #     # 1. filter out unnecessary keys
-    #     new_pretrained_dict = {k: v for k, v in new_pretrained_dict.items() if k in model_dict}
-    #     # 2. overwrite entries in the existing state dict
-    #     model_dict.update(new_pretrained_dict)
-    #     # 3. load the new state dict
-    #     model.load_state_dict(model_dict)
+
     if pretrained:
         in_channels = channels
-        # model.load_state_dict(model_zoo.load_url(model_urls['resnet152']))
         pretrained_dict = model_zoo.load_url(model_urls['resnet18'])
         model_dict = model.state_dict()
 
@@ -224,7 +211,6 @@ def flow_resnet34(pretrained=False, channels=20, num_classes=61):
 
     if pretrained:
         in_channels = channels
-        # model.load_state_dict(model_zoo.load_url(model_urls['resnet152']))
         pretrained_dict = model_zoo.load_url(model_urls['resnet34'])
         model_dict = model.state_dict()
 
@@ -247,7 +233,6 @@ def flow_resnet50(pretrained=False, **kwargs):
     """
     model = ResNet(Bottleneck, [3, 4, 6, 3], **kwargs)
     if pretrained:
-        # model.load_state_dict(model_zoo.load_url(model_urls['resnet50']))
         pretrained_dict = model_zoo.load_url(model_urls['resnet50'])
 
         model_dict = model.state_dict()
@@ -270,7 +255,6 @@ def flow_resnet50_aux(pretrained=False, **kwargs):
     """
     model = ResNet(Bottleneck, [3, 4, 6, 3], **kwargs)
     if pretrained:
-        # model.load_state_dict(model_zoo.load_url(model_urls['resnet50']))
         pretrained_dict = model_zoo.load_url(model_urls['resnet50'])
 
         model_dict = model.state_dict()
@@ -318,7 +302,6 @@ def flow_resnet152(pretrained=False, **kwargs):
     model = ResNet(Bottleneck, [3, 8, 36, 3], **kwargs)
     if pretrained:
         in_channels = 20
-        # model.load_state_dict(model_zoo.load_url(model_urls['resnet152']))
         pretrained_dict = model_zoo.load_url(model_urls['resnet152'])
         model_dict = model.state_dict()
 
