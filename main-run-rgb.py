@@ -24,6 +24,11 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
         print('Dataset not found')
         sys.exit()
 
+    # Train/Validation/Test split
+    train_splits = ["S1", "S3", "S4"]
+    val_splits = ["S2"]
+
+
     model_folder = os.path.join('./', out_dir, dataset, 'rgb', 'stage'+str(stage))  # Dir for saving models and log files
     # Create the dir
     if os.path.exists(model_folder):
@@ -45,12 +50,22 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
                                  MultiScaleCornerCrop([1, 0.875, 0.75, 0.65625], 224),
                                  ToTensor(),
                                  normalize])
-    vid_seq_train = makeDataset(train_data_dir,
+    vid_seq_train = makeDataset(train_data_dir, splits=train_splits,
                                 spatial_transform=spatial_transform,
-                                seqLen=seqLen, fmt='.jpg')
+                                seqLen=seqLen, fmt='.png')
 
     train_loader = torch.utils.data.DataLoader(vid_seq_train, batch_size=trainBatchSize,
                                                shuffle=True, num_workers=4, pin_memory=True)
+
+    vid_seq_val = makeDataset(val_data_dir, splits=val_splits,
+                              spatial_transform=Compose([Scale(256), CenterCrop(224), ToTensor(), normalize]),
+                              seqLen=seqLen, fmt='.png')
+
+    val_loader = torch.utils.data.DataLoader(vid_seq_val, batch_size=valBatchSize,
+                                             shuffle=False, num_workers=2, pin_memory=True)
+    valInstances = vid_seq_val.__len__()
+
+    '''
     if val_data_dir is not None:
 
         vid_seq_val = makeDataset(val_data_dir,
@@ -60,6 +75,7 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
         val_loader = torch.utils.data.DataLoader(vid_seq_val, batch_size=valBatchSize,
                                                  shuffle=False, num_workers=2, pin_memory=True)
         valInstances = vid_seq_val.__len__()
+    '''
 
 
     trainInstances = vid_seq_train.__len__()
