@@ -6,15 +6,16 @@ from tensorboardX import SummaryWriter
 from makeDatasetRGB import *
 import argparse
 import sys
+from torch.autograd import Variable
 
+DEVICE = "cuda"
 
 def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir, seqLen, trainBatchSize,
              valBatchSize, numEpochs, lr1, decay_factor, decay_step, memSize):
-
     if dataset == 'gtea61':
         num_classes = 61
     elif dataset == 'gtea71':
-      num_classes = 71
+        num_classes = 71
     elif dataset == 'gtea_gaze':
         num_classes = 44
     elif dataset == 'egtea':
@@ -37,25 +38,27 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
     val_log_loss = open((model_folder + '/val_log_loss.txt'), 'w')
     val_log_acc = open((model_folder + '/val_log_acc.txt'), 'w')
 
-
     # Data loader
     normalize = Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    spatial_transform = Compose([Scale(256), RandomHorizontalFlip(), MultiScaleCornerCrop([1, 0.875, 0.75, 0.65625], 224),
-                                 ToTensor(), normalize])
-
+    spatial_transform = Compose([Scale(256),
+                                 RandomHorizontalFlip(),
+                                 MultiScaleCornerCrop([1, 0.875, 0.75, 0.65625], 224),
+                                 ToTensor(),
+                                 normalize])
     vid_seq_train = makeDataset(train_data_dir,
-                                spatial_transform=spatial_transform, seqLen=seqLen, fmt='.jpg')
+                                spatial_transform=spatial_transform,
+                                seqLen=seqLen, fmt='.jpg')
 
     train_loader = torch.utils.data.DataLoader(vid_seq_train, batch_size=trainBatchSize,
-                            shuffle=True, num_workers=4, pin_memory=True)
+                                               shuffle=True, num_workers=4, pin_memory=True)
     if val_data_dir is not None:
 
         vid_seq_val = makeDataset(val_data_dir,
-                                   spatial_transform=Compose([Scale(256), CenterCrop(224), ToTensor(), normalize]),
-                                   seqLen=seqLen, fmt='.jpg')
+                                  spatial_transform=Compose([Scale(256), CenterCrop(224), ToTensor(), normalize]),
+                                  seqLen=seqLen, fmt='.jpg')
 
         val_loader = torch.utils.data.DataLoader(vid_seq_val, batch_size=valBatchSize,
-                                shuffle=False, num_workers=2, pin_memory=True)
+                                                 shuffle=False, num_workers=2, pin_memory=True)
         valInstances = vid_seq_val.__len__()
 
 
@@ -157,8 +160,8 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
             train_iter += 1
             iterPerEpoch += 1
             optimizer_fn.zero_grad()
-            inputVariable = Variable(inputs.permute(1, 0, 2, 3, 4).cuda())
-            labelVariable = Variable(targets.cuda())
+            inputVariable = Variable(inputs.permute(1, 0, 2, 3, 4).to(DEVICE))
+            labelVariable = Variable(targets.to(DEVICE))
             trainSamples += inputs.size(0)
             output_label, _ = model(inputVariable)
             loss = loss_fn(output_label, labelVariable)
@@ -183,8 +186,8 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
                 for j, (inputs, targets) in enumerate(val_loader):
                     val_iter += 1
                     val_samples += inputs.size(0)
-                    inputVariable = Variable(inputs.permute(1, 0, 2, 3, 4).cuda(), volatile=True)
-                    labelVariable = Variable(targets.cuda(async=True), volatile=True)
+                    inputVariable = Variable(inputs.permute(1, 0, 2, 3, 4).to(DEVICE))
+                    labelVariable = Variable(targets.to(DEVICE))
                     output_label, _ = model(inputVariable)
                     val_loss = loss_fn(output_label, labelVariable)
                     val_loss_epoch += val_loss.data[0]
