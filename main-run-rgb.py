@@ -10,10 +10,7 @@ from torch.autograd import Variable
 
 DEVICE = "cuda"
 
-def main_run(dataset, stage,
-             root_dir,
-             *val_data_dir,
-             stage1_dict, out_dir, seqLen, trainBatchSize,
+def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir, seqLen, trainBatchSize,
              valBatchSize, numEpochs, lr1, decay_factor, decay_step, memSize):
     if dataset == 'gtea61':
         num_classes = 61
@@ -53,19 +50,19 @@ def main_run(dataset, stage,
                                  MultiScaleCornerCrop([1, 0.875, 0.75, 0.65625], 224),
                                  ToTensor(),
                                  normalize])
-    vid_seq_train = makeDataset(root_dir, splits=train_splits,
+    vid_seq_train = makeDataset(train_data_dir, splits=train_splits,
                                 spatial_transform=spatial_transform,
                                 seqLen=seqLen, fmt='.png')
 
     train_loader = torch.utils.data.DataLoader(vid_seq_train, batch_size=trainBatchSize,
                                                shuffle=True, num_workers=4, pin_memory=True)
 
-    vid_seq_val = makeDataset(root_dir, splits=val_splits,
+    vid_seq_val = makeDataset(train_data_dir, splits=val_splits,
                               spatial_transform=Compose([Scale(256), CenterCrop(224), ToTensor(), normalize]),
-                              seqLen=seqLen, fmt='.png')
+                              seqLen=seqLen, fmt='.png', verbose=False)
 
     val_loader = torch.utils.data.DataLoader(vid_seq_val, batch_size=valBatchSize,
-                                             shuffle=False, num_workers=2, pin_memory=True)
+                                             shuffle=False, num_workers=4, pin_memory=True)
     valInstances = vid_seq_val.__len__()
 
     '''
@@ -188,45 +185,46 @@ def main_run(dataset, stage,
             optimizer_fn.step()
             _, predicted = torch.max(output_label.data, 1)
             numCorrTrain += (predicted == targets.cuda()).sum()
-            epoch_loss += loss.data[0]
+            epoch_loss += loss.data.item()
         avg_loss = epoch_loss/iterPerEpoch
-        trainAccuracy = (numCorrTrain / trainSamples) * 100
+        trainAccuracy = (numCorrTrain.data.item() / trainSamples) * 100
 
         print('Train: Epoch = {} | Loss = {} | Accuracy = {}'.format(epoch+1, avg_loss, trainAccuracy))
         writer.add_scalar('train/epoch_loss', avg_loss, epoch+1)
         writer.add_scalar('train/accuracy', trainAccuracy, epoch+1)
-        if val_data_dir is not None:
-            if (epoch+1) % 1 == 0:
-                model.train(False)
-                val_loss_epoch = 0
-                val_iter = 0
-                val_samples = 0
-                numCorr = 0
-                for j, (inputs, targets) in enumerate(val_loader):
-                    val_iter += 1
-                    val_samples += inputs.size(0)
-                    inputVariable = Variable(inputs.permute(1, 0, 2, 3, 4).to(DEVICE))
-                    labelVariable = Variable(targets.to(DEVICE))
-                    output_label, _ = model(inputVariable)
-                    val_loss = loss_fn(output_label, labelVariable)
-                    val_loss_epoch += val_loss.data[0]
-                    _, predicted = torch.max(output_label.data, 1)
-                    numCorr += (predicted == targets.cuda()).sum()
-                val_accuracy = (numCorr / val_samples) * 100
-                avg_val_loss = val_loss_epoch / val_iter
-                print('Val: Epoch = {} | Loss {} | Accuracy = {}'.format(epoch + 1, avg_val_loss, val_accuracy))
-                writer.add_scalar('val/epoch_loss', avg_val_loss, epoch + 1)
-                writer.add_scalar('val/accuracy', val_accuracy, epoch + 1)
-                val_log_loss.write('Val Loss after {} epochs = {}\n'.format(epoch + 1, avg_val_loss))
-                val_log_acc.write('Val Accuracy after {} epochs = {}%\n'.format(epoch + 1, val_accuracy))
-                if val_accuracy > min_accuracy:
-                    save_path_model = (model_folder + '/model_rgb_state_dict.pth')
-                    torch.save(model.state_dict(), save_path_model)
-                    min_accuracy = val_accuracy
-            else:
+        #if val_data_dir is not None:
+        if (epoch+1) % 1 == 0:
+            model.train(False)
+            val_loss_epoch = 0
+            val_iter = 0
+            val_samples = 0
+            numCorr = 0
+            for j, (inputs, targets) in enumerate(val_loader):
+                val_iter += 1
+                val_samples += inputs.size(0)
+                inputVariable = Variable(inputs.permute(1, 0, 2, 3, 4).to(DEVICE))
+                labelVariable = Variable(targets.to(DEVICE))
+                output_label, _ = model(inputVariable)
+                val_loss = loss_fn(output_label, labelVariable)
+                val_loss_epoch += val_loss.data.item()
+                _, predicted = torch.max(output_label.data, 1)
+                numCorr += (predicted == targets.cuda()).sum()
+            val_accuracy = (numCorr.data.item() / val_samples) * 100
+            avg_val_loss = val_loss_epoch / val_iter
+            print('Valid: Epoch = {} | Loss {} | Accuracy = {}'.format(epoch + 1, avg_val_loss, val_accuracy))
+            writer.add_scalar('val/epoch_loss', avg_val_loss, epoch + 1)
+            writer.add_scalar('val/accuracy', val_accuracy, epoch + 1)
+            val_log_loss.write('Val Loss after {} epochs = {}\n'.format(epoch + 1, avg_val_loss))
+            val_log_acc.write('Val Accuracy after {} epochs = {}%\n'.format(epoch + 1, val_accuracy))
+            if val_accuracy > min_accuracy:
+                save_path_model = (model_folder + '/model_rgb_state_dict.pth')
+                torch.save(model.state_dict(), save_path_model)
+                min_accuracy = val_accuracy
+            '''else:
                 if (epoch+1) % 10 == 0:
                     save_path_model = (model_folder + '/model_rgb_state_dict_epoch' + str(epoch+1) + '.pth')
                     torch.save(model.state_dict(), save_path_model)
+                '''
 
     train_log_loss.close()
     train_log_acc.close()
