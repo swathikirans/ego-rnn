@@ -23,7 +23,7 @@ def gen_split(root_dir, splits, stack_size):
             if insts != []:
                 for inst in insts:
                     inst_dir = os.path.join(dir2, inst)
-                    numFrames = len(glob.glob1(os.path.join(inst_dir, 'rgb'), '*[0-9].png')
+                    numFrames = len(glob.glob1(os.path.join(inst_dir, 'rgb'), '*[0-9].png'))
                     if numFrames >= stack_size:
                         Dataset.append(inst_dir)
                     Labels.append(class_id)
