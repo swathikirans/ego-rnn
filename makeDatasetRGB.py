@@ -15,10 +15,11 @@ def gen_split(root_dir, splits, stack_size):
     # root_dir  =  #drive/.../GTEA61/processed_frames/
     for split in splits:  # root_dir/SX
         dir1 = os.path.join(root_dir, split)
-        # print(dir1)
+        print(dir1)
         class_id = 0
         for target in sorted(os.listdir(dir1)):  # root_dir/SX/target/
             dir2 = os.path.join(dir1, target)
+            print(dir2)
             insts = sorted(os.listdir(dir2))  #  root_dir/SX/target/Y
             if insts != []:
                 for inst in insts:
@@ -29,7 +30,7 @@ def gen_split(root_dir, splits, stack_size):
                     Labels.append(class_id)
                     NumFrames.append(numFrames)
 
-                    class_id += 1
+            class_id += 1
     return Dataset, Labels, NumFrames
 
 

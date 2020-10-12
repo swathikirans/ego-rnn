@@ -10,7 +10,10 @@ from torch.autograd import Variable
 
 DEVICE = "cuda"
 
-def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir, seqLen, trainBatchSize,
+def main_run(dataset, stage,
+             root_dir,
+             *val_data_dir,
+             stage1_dict, out_dir, seqLen, trainBatchSize,
              valBatchSize, numEpochs, lr1, decay_factor, decay_step, memSize):
     if dataset == 'gtea61':
         num_classes = 61
@@ -50,14 +53,14 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
                                  MultiScaleCornerCrop([1, 0.875, 0.75, 0.65625], 224),
                                  ToTensor(),
                                  normalize])
-    vid_seq_train = makeDataset(train_data_dir, splits=train_splits,
+    vid_seq_train = makeDataset(root_dir, splits=train_splits,
                                 spatial_transform=spatial_transform,
                                 seqLen=seqLen, fmt='.png')
 
     train_loader = torch.utils.data.DataLoader(vid_seq_train, batch_size=trainBatchSize,
                                                shuffle=True, num_workers=4, pin_memory=True)
 
-    vid_seq_val = makeDataset(val_data_dir, splits=val_splits,
+    vid_seq_val = makeDataset(root_dir, splits=val_splits,
                               spatial_transform=Compose([Scale(256), CenterCrop(224), ToTensor(), normalize]),
                               seqLen=seqLen, fmt='.png')
 
