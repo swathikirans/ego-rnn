@@ -189,6 +189,8 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
         avg_loss = epoch_loss/iterPerEpoch
         trainAccuracy = (numCorrTrain.data.item() / trainSamples) * 100
 
+        train_log_loss.write('Training loss after {} epoch = {}\n'.format(epoch + 1, avg_loss))
+        train_log_acc.write('Training accuracy after {} epoch = {}\n'.format(epoch + 1, trainAccuracy))
         print('Train: Epoch = {} | Loss = {} | Accuracy = {}'.format(epoch+1, avg_loss, trainAccuracy))
         writer.add_scalar('train/epoch_loss', avg_loss, epoch+1)
         writer.add_scalar('train/accuracy', trainAccuracy, epoch+1)
