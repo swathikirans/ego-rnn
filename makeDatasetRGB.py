@@ -20,7 +20,7 @@ def gen_split(root_dir, splits, stack_size):
         for target in sorted(os.listdir(dir1)):  # root_dir/SX/target/
             dir2 = os.path.join(dir1, target)
             #print(dir2)
-            insts = sorted(os.listdir(dir2))  #  root_dir/SX/target/Y
+            insts = sorted(os.listdir(dir2))  # root_dir/SX/target/Y
             if insts != []:
                 for inst in insts:
                     inst_dir = os.path.join(dir2, inst)

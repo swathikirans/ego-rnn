@@ -7,42 +7,59 @@ import random
 import glob
 import sys
 
+# directory tree structure
+# ./drive/My\ Drive/GTEA61/flow_#_processed/S#/target/#/flow_#_00000.png
+# root_dir/flow_#_processed/S#/target/#/flow_#_00000.png  // Note: numbers have 5 digits
 
-def gen_split(root_dir, stackSize):
+def gen_split(root_dir,
+              splits,
+              stackSize):
     DatasetX = []
     DatasetY = []
     Labels = []
     NumFrames = []
-    root_dir = os.path.join(root_dir, 'flow_x')
-    for dir_user in sorted(os.listdir(root_dir)):
+    root_dir = os.path.join(root_dir, 'flow_x_processed')  # root_dir/flow_#_processed/
+    for split in splits:
+        dir1 = os.path.join(root_dir, split)  # root_dir/flow_#_processed/S#/
+        print(dir1)
         class_id = 0
-        dir = os.path.join(root_dir, dir_user)
-        for target in sorted(os.listdir(dir)):
-            dir1 = os.path.join(dir, target)
-            insts = sorted(os.listdir(dir1))
-            if insts != []:
+        for target in sorted(os.listdir(dir1)):
+            dir2 = os.path.join(dir1, target)  # root_dir/flow_#_processed/S#/target/
+            print(dir2)
+            insts = sorted(os.listdir(dir2))
+            if insts:
                 for inst in insts:
-                    inst_dir = os.path.join(dir1, inst)
-                    numFrames = len(glob.glob1(inst_dir, '*.jpg'))
+                    inst_dir = os.path.join(dir2, inst)  # root_dir/flow_#_processed/S#/target/#/
+                    numFrames = len(glob.glob1(inst_dir, '*[0-9].png'))
                     if numFrames >= stackSize:
                         DatasetX.append(inst_dir)
-                        DatasetY.append(inst_dir.replace('flow_x', 'flow_y'))
+                        DatasetY.append(inst_dir.replace("flow_x_processed",
+                                                         "flow_y_processed"))
                         Labels.append(class_id)
                         NumFrames.append(numFrames)
             class_id += 1
+
     return DatasetX, DatasetY, Labels, NumFrames
 
 
 class makeDataset(Dataset):
-    def __init__(self, root_dir, spatial_transform=None, sequence=False, stackSize=5,
-                 train=True, numSeg = 1, fmt='.jpg', phase='train'):
+    def __init__(self, root_dir, splits,
+                 spatial_transform=None,
+                 sequence=False,
+                 stackSize=5,
+                 train=True,
+                 numSeg = 1,
+                 fmt='.png',
+                 phase='train',
+                 verbose=False):
         """
         Args:
             root_dir (string): Directory with all the images.
+            splits (list of strings): splits to load
             transform (callable, optional): Optional transform to be applied
                 on a sample.
         """
-        self.imagesX, self.imagesY, self.labels, self.numFrames = gen_split(root_dir, stackSize)
+        self.imagesX, self.imagesY, self.labels, self.numFrames = gen_split(root_dir, splits,  stackSize)
         self.spatial_transform = spatial_transform
         self.train = train
         self.numSeg = numSeg
