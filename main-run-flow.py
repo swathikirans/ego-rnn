@@ -87,7 +87,6 @@ def main_run(dataset, trainDir, valDir, outDir, stackSize, trainBatchSize, valBa
     train_iter = 0
 
     for epoch in range(numEpochs):
-        optim_scheduler.step() # move to the end
         epoch_loss = 0
         numCorrTrain = 0
         trainSamples = 0
@@ -109,6 +108,8 @@ def main_run(dataset, trainDir, valDir, outDir, stackSize, trainBatchSize, valBa
             numCorrTrain += (predicted == targets.to(DEVICE )).sum()
             epoch_loss += loss.data.item()
 
+        optim_scheduler.step()
+
         avg_loss = epoch_loss/iterPerEpoch
         trainAccuracy = (numCorrTrain.data.item() / trainSamples) * 100
         print('Train: Epoch = {} | Loss = {} | Accuracy = {}'.format(epoch + 1, avg_loss, trainAccuracy))
@@ -116,38 +117,38 @@ def main_run(dataset, trainDir, valDir, outDir, stackSize, trainBatchSize, valBa
         writer.add_scalar('train/accuracy', trainAccuracy, epoch+1)
         train_log_loss.write('Training loss after {} epoch = {}\n'.format(epoch+1, avg_loss))
         train_log_acc.write('Training accuracy after {} epoch = {}\n'.format(epoch+1, trainAccuracy))
-        if valDir is not None:
-            if (epoch+1) % 1 == 0:
-                model.train(False)
-                val_loss_epoch = 0
-                val_iter = 0
-                val_samples = 0
-                numCorr = 0
-                for j, (inputs, targets) in enumerate(val_loader):
-                    val_iter += 1
-                    val_samples += inputs.size(0)
-                    inputVariable = Variable(inputs.to(DEVICE), volatile=True)
-                    labelVariable = Variable(targets.to(DEVICE), volatile=True)
-                    output_label, _ = model(inputVariable)
-                    val_loss = loss_fn(output_label, labelVariable)
-                    val_loss_epoch += val_loss.data[0]
-                    _, predicted = torch.max(output_label.data, 1)
-                    numCorr += (predicted == targets.to(DEVICE)).sum()
-                val_accuracy = (numCorr / val_samples) * 100
-                avg_val_loss = val_loss_epoch / val_iter
-                print('Validation: Epoch = {} | Loss = {} | Accuracy = {}'.format(epoch + 1, avg_val_loss, val_accuracy))
-                writer.add_scalar('val/epoch_loss', avg_val_loss, epoch + 1)
-                writer.add_scalar('val/accuracy', val_accuracy, epoch + 1)
-                val_log_loss.write('Val Loss after {} epochs = {}\n'.format(epoch + 1, avg_val_loss))
-                val_log_acc.write('Val Accuracy after {} epochs = {}%\n'.format(epoch + 1, val_accuracy))
-                if val_accuracy > min_accuracy:
-                    save_path_model = (model_folder + '/model_flow_state_dict.pth')
-                    torch.save(model.state_dict(), save_path_model)
-                    min_accuracy = val_accuracy
-            else:
-                if (epoch+1) % 10 == 0:
-                    save_path_model = (model_folder + '/model_flow_state_dict_epoch' + str(epoch+1) + '.pth')
-                    torch.save(model.state_dict(), save_path_model)
+
+        if (epoch+1) % 1 == 0:
+            model.train(False)
+            val_loss_epoch = 0
+            val_iter = 0
+            val_samples = 0
+            numCorr = 0
+            for j, (inputs, targets) in enumerate(val_loader):
+                val_iter += 1
+                val_samples += inputs.size(0)
+                inputVariable = Variable(inputs.to(DEVICE), volatile=True)
+                labelVariable = Variable(targets.to(DEVICE), volatile=True)
+                output_label, _ = model(inputVariable)
+                val_loss = loss_fn(output_label, labelVariable)
+                val_loss_epoch += val_loss.data[0]
+                _, predicted = torch.max(output_label.data, 1)
+                numCorr += (predicted == targets.to(DEVICE)).sum()
+            val_accuracy = (numCorr / val_samples) * 100
+            avg_val_loss = val_loss_epoch / val_iter
+            print('Validation: Epoch = {} | Loss = {} | Accuracy = {}'.format(epoch + 1, avg_val_loss, val_accuracy))
+            writer.add_scalar('val/epoch_loss', avg_val_loss, epoch + 1)
+            writer.add_scalar('val/accuracy', val_accuracy, epoch + 1)
+            val_log_loss.write('Val Loss after {} epochs = {}\n'.format(epoch + 1, avg_val_loss))
+            val_log_acc.write('Val Accuracy after {} epochs = {}%\n'.format(epoch + 1, val_accuracy))
+            if val_accuracy > min_accuracy:
+                save_path_model = (model_folder + '/model_flow_state_dict.pth')
+                torch.save(model.state_dict(), save_path_model)
+                min_accuracy = val_accuracy
+        else:
+            if (epoch+1) % 10 == 0:
+                save_path_model = (model_folder + '/model_flow_state_dict_epoch' + str(epoch+1) + '.pth')
+                torch.save(model.state_dict(), save_path_model)
 
     train_log_loss.close()
     train_log_acc.close()
