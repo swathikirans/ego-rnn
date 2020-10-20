@@ -131,10 +131,10 @@ def main_run(dataset, trainDir, valDir, outDir, stackSize, trainBatchSize, valBa
                 labelVariable = Variable(targets.to(DEVICE), volatile=True)
                 output_label, _ = model(inputVariable)
                 val_loss = loss_fn(output_label, labelVariable)
-                val_loss_epoch += val_loss.data[0]
+                val_loss_epoch += val_loss.data.item()
                 _, predicted = torch.max(output_label.data, 1)
                 numCorr += (predicted == targets.to(DEVICE)).sum()
-            val_accuracy = (numCorr / val_samples) * 100
+            val_accuracy = (numCorr.data.item() / val_samples) * 100
             avg_val_loss = val_loss_epoch / val_iter
             print('Validation: Epoch = {} | Loss = {} | Accuracy = {}'.format(epoch + 1, avg_val_loss, val_accuracy))
             writer.add_scalar('val/epoch_loss', avg_val_loss, epoch + 1)
