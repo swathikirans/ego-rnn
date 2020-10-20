@@ -8,12 +8,14 @@ from torch.autograd import Variable
 from makeDatasetFlow import *
 import argparse
 import sys
+from torch.autograd import Variable
 
+DEVICE = "cuda"
 
 def main_run(dataset, trainDir, valDir, outDir, stackSize, trainBatchSize, valBatchSize, numEpochs, lr1,
              decay_factor, decay_step):
 
-
+    #TODO: remove only gtea61
     if dataset == 'gtea61':
         num_classes = 61
     elif dataset == 'gtea71':
@@ -25,6 +27,10 @@ def main_run(dataset, trainDir, valDir, outDir, stackSize, trainBatchSize, valBa
     else:
         print('Dataset not found')
         sys.exit()
+
+    # Train/Validation/Test split
+    train_splits = ["S1", "S3", "S4"]
+    val_splits = ["S2"]
 
     min_accuracy = 0
 
@@ -42,26 +48,25 @@ def main_run(dataset, trainDir, valDir, outDir, stackSize, trainBatchSize, valBa
     val_log_loss = open((model_folder + '/val_log_loss.txt'), 'w')
     val_log_acc = open((model_folder + '/val_log_acc.txt'), 'w')
 
-
+    num_workers = 4
     # Data loader
     normalize = Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
     spatial_transform = Compose([Scale(256), RandomHorizontalFlip(), MultiScaleCornerCrop([1, 0.875, 0.75, 0.65625], 224),
                                  ToTensor(), normalize])
 
-    vid_seq_train = makeDataset(trainDir, spatial_transform=spatial_transform, sequence=False,
-                                stackSize=stackSize, fmt='.jpg')
+    vid_seq_train = makeDataset(trainDir, train_splits, spatial_transform=spatial_transform, sequence=False,
+                                stackSize=stackSize, fmt='.png')
 
     train_loader = torch.utils.data.DataLoader(vid_seq_train, batch_size=trainBatchSize,
-                            shuffle=True, sampler=None, num_workers=4, pin_memory=True)
-    if valDir is not None:
+                            shuffle=True, sampler=None, num_workers=num_workers, pin_memory=True)
 
-        vid_seq_val = makeDataset(valDir, spatial_transform=Compose([Scale(256), CenterCrop(224), ToTensor(), normalize]),
-                                   sequence=False, stackSize=stackSize, fmt='.jpg', phase='Test')
+    vid_seq_val = makeDataset(trainDir, val_splits, spatial_transform=Compose([Scale(256), CenterCrop(224), ToTensor(), normalize]),
+                               sequence=False, stackSize=stackSize, fmt='.png', phase='Test')
 
-        val_loader = torch.utils.data.DataLoader(vid_seq_val, batch_size=valBatchSize,
-                                shuffle=False, num_workers=2, pin_memory=True)
-        valInstances = vid_seq_val.__len__()
+    val_loader = torch.utils.data.DataLoader(vid_seq_val, batch_size=valBatchSize,
+                            shuffle=False, num_workers=num_workers, pin_memory=True)
+    valInstances = vid_seq_val.__len__()
 
 
     trainInstances = vid_seq_train.__len__()
@@ -82,7 +87,7 @@ def main_run(dataset, trainDir, valDir, outDir, stackSize, trainBatchSize, valBa
     train_iter = 0
 
     for epoch in range(numEpochs):
-        optim_scheduler.step()
+        optim_scheduler.step() # move to the end
         epoch_loss = 0
         numCorrTrain = 0
         trainSamples = 0
@@ -93,18 +98,19 @@ def main_run(dataset, trainDir, valDir, outDir, stackSize, trainBatchSize, valBa
             train_iter += 1
             iterPerEpoch += 1
             optimizer_fn.zero_grad()
-            inputVariable = Variable(inputs.cuda())
-            labelVariable = Variable(targets.cuda())
+            inputVariable = Variable(inputs.to(DEVICE))
+            labelVariable = Variable(targets.to(DEVICE))
             trainSamples += inputs.size(0)
             output_label, _ = model(inputVariable)
             loss = loss_fn(output_label, labelVariable)
             loss.backward()
             optimizer_fn.step()
             _, predicted = torch.max(output_label.data, 1)
-            numCorrTrain += (predicted == targets.cuda()).sum()
-            epoch_loss += loss.data[0]
+            numCorrTrain += (predicted == targets.to(DEVICE )).sum()
+            epoch_loss += loss.data.item()
+
         avg_loss = epoch_loss/iterPerEpoch
-        trainAccuracy = (numCorrTrain / trainSamples) * 100
+        trainAccuracy = (numCorrTrain.data.item() / trainSamples) * 100
         print('Train: Epoch = {} | Loss = {} | Accuracy = {}'.format(epoch + 1, avg_loss, trainAccuracy))
         writer.add_scalar('train/epoch_loss', avg_loss, epoch+1)
         writer.add_scalar('train/accuracy', trainAccuracy, epoch+1)
@@ -120,13 +126,13 @@ def main_run(dataset, trainDir, valDir, outDir, stackSize, trainBatchSize, valBa
                 for j, (inputs, targets) in enumerate(val_loader):
                     val_iter += 1
                     val_samples += inputs.size(0)
-                    inputVariable = Variable(inputs.cuda(), volatile=True)
-                    labelVariable = Variable(targets.cuda(async=True), volatile=True)
+                    inputVariable = Variable(inputs.to(DEVICE), volatile=True)
+                    labelVariable = Variable(targets.to(DEVICE), volatile=True)
                     output_label, _ = model(inputVariable)
                     val_loss = loss_fn(output_label, labelVariable)
                     val_loss_epoch += val_loss.data[0]
                     _, predicted = torch.max(output_label.data, 1)
-                    numCorr += (predicted == targets.cuda()).sum()
+                    numCorr += (predicted == targets.to(DEVICE)).sum()
                 val_accuracy = (numCorr / val_samples) * 100
                 avg_val_loss = val_loss_epoch / val_iter
                 print('Validation: Epoch = {} | Loss = {} | Accuracy = {}'.format(epoch + 1, avg_val_loss, val_accuracy))
