@@ -21,7 +21,7 @@ def gen_split(root_dir, splits, stack_size):
             dir2 = os.path.join(dir1, target)
             #print(dir2)
             insts = sorted(os.listdir(dir2))  # root_dir/SX/target/Y
-            if insts != []:
+            if insts:
                 for inst in insts:
                     inst_dir = os.path.join(dir2, inst)
                     numFrames = len(glob.glob1(os.path.join(inst_dir, 'rgb'), '*[0-9].png'))
