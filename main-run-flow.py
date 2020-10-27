@@ -8,25 +8,14 @@ from torch.autograd import Variable
 from makeDatasetFlow import *
 import argparse
 import sys
-from torch.autograd import Variable
+import torch
 
 DEVICE = "cuda"
 
 def main_run(dataset, trainDir, valDir, outDir, stackSize, trainBatchSize, valBatchSize, numEpochs, lr1,
              decay_factor, decay_step):
-
-    #TODO: remove only gtea61
-    if dataset == 'gtea61':
-        num_classes = 61
-    elif dataset == 'gtea71':
-      num_classes = 71
-    elif dataset == 'gtea_gaze':
-        num_classes = 44
-    elif dataset == 'egtea':
-        num_classes = 106
-    else:
-        print('Dataset not found')
-        sys.exit()
+    # GTEA 61
+    num_classes = 61
 
     # Train/Validation/Test split
     train_splits = ["S1", "S3", "S4"]
@@ -127,8 +116,8 @@ def main_run(dataset, trainDir, valDir, outDir, stackSize, trainBatchSize, valBa
             for j, (inputs, targets) in enumerate(val_loader):
                 val_iter += 1
                 val_samples += inputs.size(0)
-                inputVariable = Variable(inputs.to(DEVICE), volatile=True)
-                labelVariable = Variable(targets.to(DEVICE), volatile=True)
+                inputVariable = Variable(inputs.to(DEVICE))
+                labelVariable = Variable(targets.to(DEVICE))
                 output_label, _ = model(inputVariable)
                 val_loss = loss_fn(output_label, labelVariable)
                 val_loss_epoch += val_loss.data.item()

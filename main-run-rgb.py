@@ -12,17 +12,8 @@ DEVICE = "cuda"
 
 def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir, seqLen, trainBatchSize,
              valBatchSize, numEpochs, lr1, decay_factor, decay_step, memSize):
-    if dataset == 'gtea61':
-        num_classes = 61
-    elif dataset == 'gtea71':
-        num_classes = 71
-    elif dataset == 'gtea_gaze':
-        num_classes = 44
-    elif dataset == 'egtea':
-        num_classes = 106
-    else:
-        print('Dataset not found')
-        sys.exit()
+    # GTEA 61
+    num_classes = 61
 
     # Train/Validation/Test split
     train_splits = ["S1", "S3", "S4"]
