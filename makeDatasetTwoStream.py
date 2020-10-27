@@ -8,36 +8,48 @@ import glob
 import sys
 
 
-def gen_split(root_dir, stackSize):
-    DatasetX = []
-    DatasetY = []
-    DatasetF = []
-    Labels = []
-    NumFrames = []
-    root_dir = os.path.join(root_dir, 'flow_x')
-    for dir_user in sorted(os.listdir(root_dir)):
+def gen_split(root_dir, splits, stack_size):
+    DatasetX = []   # flow_x
+    DatasetY = []   # flow_y
+    DatasetF = []   # rgb
+    Labels = []     # label
+    NumFrames = []  # number of frames -> from flowDataset
+
+    # root_dir  =  #drive/.../GTEA61/[processed_frames|flow_x_processed|flow_y_processed]/
+    root_dit = os.path.join(root_dir, 'flow_x_processed')
+    for split in splits: #
+        dir1 = os.path.join(root_dir, split)  # root_dir/S#/
         class_id = 0
-        dir = os.path.join(root_dir, dir_user)
-        for target in sorted(os.listdir(dir)):
-            dir1 = os.path.join(dir, target)
-            insts = sorted(os.listdir(dir1))
-            if insts != []:
+        for target in sorted(os.listdir(dir1)):
+            dir2 = os.path.join(dir1, target)  # root_dir/S#/target/
+            insts = sorted(os.listdir(dir2))
+            if insts:
                 for inst in insts:
-                    inst_dir = os.path.join(dir1, inst)
-                    numFrames = len(glob.glob1(inst_dir, '*.jpg'))
-                    if numFrames >= stackSize:
+                    inst_dir = os.path.join(dir2, inst)  # root_dir/S#/target/#
+                    num_frames = len(glob.glob1(inst_dir, '*[0-9].png'))
+                    # TODO: check for elements with missing frames, note that the code is taking as number of
+                    #       frames of the x_flow (check if this number coincides with rgb and flow_y frames)
+                    if num_frames >= stack_size:
                         DatasetX.append(inst_dir)
-                        DatasetY.append(inst_dir.replace('flow_x', 'flow_y'))
-                        DatasetF.append(inst_dir.replace('flow_x', 'frames'))
+                        DatasetY.append(inst_dir.replace('flow_x_processed',
+                                                         'flow_y_processed'))
+                        DatasetF.append(inst_dir.replace('flow_x_processed',
+                                                         'processed_frames'))
                         Labels.append(class_id)
-                        NumFrames.append(numFrames)
+                        NumFrames.append(num_frames)
             class_id += 1
     return DatasetX, DatasetY, DatasetF, Labels, NumFrames
 
-
 class makeDataset(Dataset):
-    def __init__(self, root_dir, spatial_transform=None, sequence=False, stackSize=5,
-                 train=True, numSeg=5, fmt='.jpg', phase='train', seqLen = 25):
+    def __init__(self, root_dir, splits,
+                 spatial_transform=None,
+                 sequence=False,
+                 stackSize=5,
+                 train=True,
+                 numSeg=5,
+                 fmt='.png',
+                 phase='train',
+                 seqLen = 25):
         """
         Args:
             root_dir (string): Directory with all the images.
@@ -46,7 +58,7 @@ class makeDataset(Dataset):
         """
 
         self.imagesX, self.imagesY, self.imagesF, self.labels, self.numFrames = gen_split(
-            root_dir, stackSize)
+            root_dir, splits, stackSize)
         self.spatial_transform = spatial_transform
         self.train = train
         self.numSeg = numSeg
@@ -67,6 +79,8 @@ class makeDataset(Dataset):
         numFrame = self.numFrames[idx]
         inpSeqSegs = []
         self.spatial_transform.randomize_parameters()
+
+        # This loop use a sequence of stacks of flow frames  [stackSize frames] x numSeg
         if self.sequence is True:
             if numFrame <= self.stackSize:
                 frameStart = np.ones(self.numSeg)
@@ -76,15 +90,17 @@ class makeDataset(Dataset):
                 inpSeq = []
                 for k in range(self.stackSize):
                     i = k + int(startFrame)
-                    fl_name = vid_nameX + '/flow_x_' + str(int(round(i))).zfill(5) + '.jpg'
+                    fl_name = vid_nameX + '/flow_x_' + str(int(round(i))).zfill(5) + self.fmt
                     img = Image.open(fl_name)
                     inpSeq.append(self.spatial_transform(img.convert('L'), inv=True, flow=True))
                     # fl_names.append(fl_name)
-                    fl_name = vid_nameY + '/flow_y_' + str(int(round(i))).zfill(5) + '.jpg'
+                    fl_name = vid_nameY + '/flow_y_' + str(int(round(i))).zfill(5) + self.fmt
                     img = Image.open(fl_name)
                     inpSeq.append(self.spatial_transform(img.convert('L'), inv=False, flow=True))
                 inpSeqSegs.append(torch.stack(inpSeq, 0).squeeze())
             inpSeqSegs = torch.stack(inpSeqSegs, 0)
+
+        # This is the loop used in the train phase
         else:
             if numFrame <= self.stackSize:
                 startFrame = 1
@@ -96,18 +112,18 @@ class makeDataset(Dataset):
             inpSeq = []
             for k in range(self.stackSize):
                 i = k + int(startFrame)
-                fl_name = vid_nameX + '/flow_x_' + str(int(round(i))).zfill(5) + '.jpg'
+                fl_name = vid_nameX + '/flow_x_' + str(int(round(i))).zfill(5) + self.fmt
                 img = Image.open(fl_name)
                 inpSeq.append(self.spatial_transform(img.convert('L'), inv=True, flow=True))
                 # fl_names.append(fl_name)
-                fl_name = vid_nameY + '/flow_y_' + str(int(round(i))).zfill(5) + '.jpg'
+                fl_name = vid_nameY + '/flow_y_' + str(int(round(i))).zfill(5) + self.fmt
                 img = Image.open(fl_name)
                 inpSeq.append(self.spatial_transform(img.convert('L'), inv=False, flow=True))
             inpSeqSegs = torch.stack(inpSeq, 0).squeeze(1)
         inpSeqF = []
         for i in np.linspace(1, numFrame, self.seqLen, endpoint=False):
-            fl_name = vid_nameF + '/' + 'image_' + str(int(np.floor(i))).zfill(5) + self.fmt
+            fl_name = vid_nameF + '/rgb/rgb' + str(int(np.floor(i))).zfill(5) + self.fmt
             img = Image.open(fl_name)
             inpSeqF.append(self.spatial_transform(img.convert('RGB')))
         inpSeqF = torch.stack(inpSeqF, 0)
-        return inpSeqSegs, inpSeqF, label#, vid_nameF#, fl_name
+        return inpSeqSegs, inpSeqF, label #, vid_nameF#, fl_name
