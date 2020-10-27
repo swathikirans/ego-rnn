@@ -169,15 +169,15 @@ def main_run(dataset, flowModel, rgbModel, stackSize, seqLen, memSize, trainData
             numCorr = 0
             for j, (inputFlow, inputFrame, targets) in enumerate(val_loader):
                 val_iter += 1
-                inputVariableFlow = Variable(inputFlow.cuda())
-                inputVariableFrame = Variable(inputFrame.permute(1, 0, 2, 3, 4).cuda())
-                labelVariable = Variable(targets.cuda())
+                inputVariableFlow = Variable(inputFlow.to(DEVICE))
+                inputVariableFrame = Variable(inputFrame.permute(1, 0, 2, 3, 4).to(DEVICE))
+                labelVariable = Variable(targets.to(DEVICE))
                 output_label = model(inputVariableFlow, inputVariableFrame)
                 loss = loss_fn(torch.log_softmax(output_label, dim=1), labelVariable)
-                val_loss_epoch += loss.data[0]
+                val_loss_epoch += loss.data.item()
                 _, predicted = torch.max(output_label.data, 1)
                 numCorr += (predicted == labelVariable.data).sum()
-            val_accuracy = (numCorr / valSamples) * 100
+            val_accuracy = (numCorr.item() / valSamples) * 100
             avg_val_loss = val_loss_epoch / val_iter
             print('Val Loss after {} epochs, loss = {}'.format(epoch + 1, avg_val_loss))
             print('Val Accuracy after {} epochs = {}%'.format(epoch + 1, val_accuracy))
