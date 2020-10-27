@@ -11,22 +11,17 @@ import argparse
 
 import sys
 
+DEVICE = 'cuda'
 
 def main_run(dataset, flowModel, rgbModel, stackSize, seqLen, memSize, trainDatasetDir, valDatasetDir, outDir,
              trainBatchSize, valBatchSize, lr1, numEpochs, decay_step, decay_factor):
+    # GTEA 61
+    num_classes = 61
 
-
-    if dataset == 'gtea61':
-        num_classes = 61
-    elif dataset == 'gtea71':
-        num_classes = 71
-    elif dataset == 'gtea_gaze':
-        num_classes = 44
-    elif dataset == 'egtea':
-        num_classes = 106
-    else:
-        print('Dataset not found')
-        sys.exit()
+    # Train/Validation/Test split
+    train_splits = ["S1", "S3", "S4"]
+    val_splits = ["S2"]
+    directory = trainDatasetDir
 
     model_folder = os.path.join('./', outDir, dataset, 'twoStream')  # Dir for saving models and log files
     # Create the dir
@@ -42,33 +37,36 @@ def main_run(dataset, flowModel, rgbModel, stackSize, seqLen, memSize, trainData
     val_log_loss = open((model_folder + '/val_log_loss.txt'), 'w')
     val_log_acc = open((model_folder + '/val_log_acc.txt'), 'w')
 
-
     mean = [0.485, 0.456, 0.406]
     std = [0.229, 0.224, 0.225]
 
     normalize = Normalize(mean=mean, std=std)
 
-    spatial_transform = Compose([Scale(256), RandomHorizontalFlip(), MultiScaleCornerCrop([1, 0.875, 0.75, 0.65625], 224),
-                                 ToTensor(), normalize])
+    spatial_transform = Compose([Scale(256),
+                                 RandomHorizontalFlip(),
+                                 MultiScaleCornerCrop([1, 0.875, 0.75, 0.65625], 224),
+                                 ToTensor(),
+                                 normalize])
 
-    vid_seq_train = makeDataset(trainDatasetDir,spatial_transform=spatial_transform,
-                               sequence=False, numSeg=1, stackSize=stackSize, fmt='.jpg', seqLen=seqLen)
+    vid_seq_train = makeDataset(directory, train_splits, spatial_transform=spatial_transform,
+                                sequence=False, numSeg=1, stackSize=stackSize, fmt='.png', seqLen=seqLen)
 
     train_loader = torch.utils.data.DataLoader(vid_seq_train, batch_size=trainBatchSize,
-                            shuffle=True, num_workers=4, pin_memory=True)
+                                               shuffle=True, num_workers=4, pin_memory=True)
 
-    if valDatasetDir is not None:
+    vid_seq_val = makeDataset(directory, val_splits,
+                              spatial_transform=Compose([Scale(256), CenterCrop(224), ToTensor(), normalize]),
+                              sequence=False, numSeg=1, stackSize=stackSize, fmt='.png', phase='Test',
+                              seqLen=seqLen)
 
-        vid_seq_val = makeDataset(valDatasetDir,
-                                   spatial_transform=Compose([Scale(256), CenterCrop(224), ToTensor(), normalize]),
-                                   sequence=False, numSeg=1, stackSize=stackSize, fmt='.jpg', phase='Test',
-                                   seqLen=seqLen)
+    val_loader = torch.utils.data.DataLoader(vid_seq_val, batch_size=valBatchSize,
+                                             shuffle=False, num_workers=2, pin_memory=True)
+    valSamples = vid_seq_val.__len__()
 
-        val_loader = torch.utils.data.DataLoader(vid_seq_val, batch_size=valBatchSize,
-                                shuffle=False, num_workers=2, pin_memory=True)
-        valSamples = vid_seq_val.__len__()
-
-    model = twoStreamAttentionModel(flowModel=flowModel, frameModel=rgbModel, stackSize=stackSize, memSize=memSize,
+    model = twoStreamAttentionModel(flowModel=flowModel,
+                                    frameModel=rgbModel,
+                                    stackSize=stackSize,
+                                    memSize=memSize,
                                     num_classes=num_classes)
 
     for params in model.parameters():
@@ -133,7 +131,6 @@ def main_run(dataset, flowModel, rgbModel, stackSize, seqLen, memSize, trainData
     train_iter = 0
 
     for epoch in range(numEpochs):
-        optim_scheduler.step()
         epoch_loss = 0
         numCorrTrain = 0
         iterPerEpoch = 0
@@ -143,56 +140,62 @@ def main_run(dataset, flowModel, rgbModel, stackSize, seqLen, memSize, trainData
             train_iter += 1
             iterPerEpoch += 1
             optimizer_fn.zero_grad()
-            inputVariableFlow = Variable(inputFlow.cuda())
-            inputVariableFrame = Variable(inputFrame.permute(1, 0, 2, 3, 4).cuda())
-            labelVariable = Variable(targets.cuda())
+            inputVariableFlow = Variable(inputFlow.to(DEVICE))
+            inputVariableFrame = Variable(inputFrame.permute(1, 0, 2, 3, 4).to(DEVICE))
+            labelVariable = Variable(targets.to(DEVICE))
             output_label = model(inputVariableFlow, inputVariableFrame)
-            loss = loss_fn(F.log_softmax(output_label, dim=1), labelVariable)
+            loss = loss_fn(torch.log_softmax(output_label, dim=1), labelVariable)
             loss.backward()
             optimizer_fn.step()
             _, predicted = torch.max(output_label.data, 1)
             numCorrTrain += (predicted == targets.cuda()).sum()
-            epoch_loss += loss.data[0]
+            epoch_loss += loss.data.item()
+
         avg_loss = epoch_loss / iterPerEpoch
-        trainAccuracy = (numCorrTrain / trainSamples) * 100
+        trainAccuracy = (numCorrTrain.item() / trainSamples) * 100
         print('Average training loss after {} epoch = {} '.format(epoch + 1, avg_loss))
         print('Training accuracy after {} epoch = {}% '.format(epoch + 1, trainAccuracy))
         writer.add_scalar('train/epoch_loss', avg_loss, epoch + 1)
         writer.add_scalar('train/accuracy', trainAccuracy, epoch + 1)
         train_log_loss.write('Training loss after {} epoch = {}\n'.format(epoch + 1, avg_loss))
         train_log_acc.write('Training accuracy after {} epoch = {}\n'.format(epoch + 1, trainAccuracy))
-        if valDatasetDir is not None:
-            if (epoch + 1) % 1 == 0:
-                model.train(False)
-                val_loss_epoch = 0
-                val_iter = 0
-                numCorr = 0
-                for j, (inputFlow, inputFrame, targets) in enumerate(val_loader):
-                    val_iter += 1
-                    inputVariableFlow = Variable(inputFlow.cuda())
-                    inputVariableFrame = Variable(inputFrame.permute(1, 0, 2, 3, 4).cuda())
-                    labelVariable = Variable(targets.cuda())
-                    output_label = model(inputVariableFlow, inputVariableFrame)
-                    loss = loss_fn(F.log_softmax(output_label, dim=1), labelVariable)
-                    val_loss_epoch += loss.data[0]
-                    _, predicted = torch.max(output_label.data, 1)
-                    numCorr += (predicted == labelVariable.data).sum()
-                val_accuracy = (numCorr / valSamples) * 100
-                avg_val_loss = val_loss_epoch / val_iter
-                print('Val Loss after {} epochs, loss = {}'.format(epoch + 1, avg_val_loss))
-                print('Val Accuracy after {} epochs = {}%'.format(epoch + 1, val_accuracy))
-                writer.add_scalar('val/epoch_loss', avg_val_loss, epoch + 1)
-                writer.add_scalar('val/accuracy', val_accuracy, epoch + 1)
-                val_log_loss.write('Val Loss after {} epochs = {}\n'.format(epoch + 1, avg_val_loss))
-                val_log_acc.write('Val Accuracy after {} epochs = {}%\n'.format(epoch + 1, val_accuracy))
-                if val_accuracy > min_accuracy:
-                    save_path_model = (model_folder + '/model_twoStream_state_dict.pth')
-                    torch.save(model.state_dict(), save_path_model)
-                    min_accuracy = val_accuracy
-        else:
-            if (epoch + 1) % 10 == 0:
-                save_path_model = (model_folder + '/model_twoStream_state_dict_epoch' + str(epoch + 1) + '.pth')
+
+        # Validation Phase
+        #if valDatasetDir is not None:
+        if (epoch + 1) % 1 == 0:
+            model.train(False)
+            val_loss_epoch = 0
+            val_iter = 0
+            numCorr = 0
+            for j, (inputFlow, inputFrame, targets) in enumerate(val_loader):
+                val_iter += 1
+                inputVariableFlow = Variable(inputFlow.cuda())
+                inputVariableFrame = Variable(inputFrame.permute(1, 0, 2, 3, 4).cuda())
+                labelVariable = Variable(targets.cuda())
+                output_label = model(inputVariableFlow, inputVariableFrame)
+                loss = loss_fn(torch.log_softmax(output_label, dim=1), labelVariable)
+                val_loss_epoch += loss.data[0]
+                _, predicted = torch.max(output_label.data, 1)
+                numCorr += (predicted == labelVariable.data).sum()
+            val_accuracy = (numCorr / valSamples) * 100
+            avg_val_loss = val_loss_epoch / val_iter
+            print('Val Loss after {} epochs, loss = {}'.format(epoch + 1, avg_val_loss))
+            print('Val Accuracy after {} epochs = {}%'.format(epoch + 1, val_accuracy))
+            writer.add_scalar('val/epoch_loss', avg_val_loss, epoch + 1)
+            writer.add_scalar('val/accuracy', val_accuracy, epoch + 1)
+            val_log_loss.write('Val Loss after {} epochs = {}\n'.format(epoch + 1, avg_val_loss))
+            val_log_acc.write('Val Accuracy after {} epochs = {}%\n'.format(epoch + 1, val_accuracy))
+            if val_accuracy > min_accuracy:
+                save_path_model = (model_folder + '/model_twoStream_state_dict.pth')
                 torch.save(model.state_dict(), save_path_model)
+                min_accuracy = val_accuracy
+        #else:
+        #    if (epoch + 1) % 10 == 0:
+        #        save_path_model = (model_folder + '/model_twoStream_state_dict_epoch' + str(epoch + 1) + '.pth')
+        #        torch.save(model.state_dict(), save_path_model)
+
+        optim_scheduler.step()
+
     train_log_loss.close()
     train_log_acc.close()
     val_log_acc.close()
@@ -243,5 +246,6 @@ def __main__():
 
     main_run(dataset, flowModel, rgbModel, stackSize, seqLen, memSize, trainDatasetDir, valDatasetDir, outDir,
              trainBatchSize, valBatchSize, lr1, numEpochs, decay_step, decay_factor)
+
 
 __main__()
