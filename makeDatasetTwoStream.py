@@ -16,7 +16,7 @@ def gen_split(root_dir, splits, stack_size):
     NumFrames = []  # number of frames -> from flowDataset
 
     # root_dir  =  #drive/.../GTEA61/[processed_frames|flow_x_processed|flow_y_processed]/
-    root_dit = os.path.join(root_dir, 'flow_x_processed')
+    root_dir = os.path.join(root_dir, 'flow_x_processed')
     for split in splits: #
         dir1 = os.path.join(root_dir, split)  # root_dir/S#/
         class_id = 0
@@ -120,6 +120,8 @@ class makeDataset(Dataset):
                 img = Image.open(fl_name)
                 inpSeq.append(self.spatial_transform(img.convert('L'), inv=False, flow=True))
             inpSeqSegs = torch.stack(inpSeq, 0).squeeze(1)
+
+        # Collect the rgb frames
         inpSeqF = []
         for i in np.linspace(1, numFrame, self.seqLen, endpoint=False):
             fl_name = vid_nameF + '/rgb/rgb' + str(int(np.floor(i))).zfill(5) + self.fmt
