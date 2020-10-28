@@ -11,7 +11,7 @@ from torch.autograd import Variable
 DEVICE = "cuda"
 
 def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir, seqLen, trainBatchSize,
-             valBatchSize, numEpochs, lr1, decay_factor, decay_step, memSize):
+             valBatchSize, numEpochs, lr1, decay_factor, decay_step, memSize, CAM=True):
     # GTEA 61
     num_classes = 61
 
@@ -246,6 +246,7 @@ def __main__():
     parser.add_argument('--stepSize', type=float, default=[25, 75, 150], nargs="+", help='Learning rate decay step')
     parser.add_argument('--decayRate', type=float, default=0.1, help='Learning rate decay rate')
     parser.add_argument('--memSize', type=int, default=512, help='ConvLSTM hidden state size')
+    parser.add_argument('--CAM', type=str, default='y', help='C Attention Maps')
 
     args = parser.parse_args()
 
@@ -263,8 +264,9 @@ def __main__():
     stepSize = args.stepSize
     decayRate = args.decayRate
     memSize = args.memSize
+    CAM = args.CAM == 'y'
 
     main_run(dataset, stage, trainDatasetDir, valDatasetDir, stage1Dict, outDir, seqLen, trainBatchSize,
-             valBatchSize, numEpochs, lr1, decayRate, stepSize, memSize)
+             valBatchSize, numEpochs, lr1, decayRate, stepSize, memSize, CAM)
 
 __main__()
