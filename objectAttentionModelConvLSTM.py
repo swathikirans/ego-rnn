@@ -2,7 +2,6 @@ import torch
 import resnetMod
 import torch.nn as nn
 from torch.nn import functional as F
-from torch.autograd import Variable
 from MyConvLSTMCell import *
 
 
@@ -21,8 +20,8 @@ class attentionModel(nn.Module):
         self.cam = cam
 
     def forward(self, inputVariable):
-        state = (Variable(torch.zeros((inputVariable.size(1), self.mem_size, 7, 7)).cuda()),
-                 Variable(torch.zeros((inputVariable.size(1), self.mem_size, 7, 7)).cuda()))
+        state = (torch.zeros((inputVariable.size(1), self.mem_size, 7, 7)).cuda(),
+                 torch.zeros((inputVariable.size(1), self.mem_size, 7, 7)).cuda())
         for t in range(inputVariable.size(0)):
             logit, feature_conv, feature_convNBN = self.resNet(inputVariable[t])
             bz, nc, h, w = feature_conv.size()

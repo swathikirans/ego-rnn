@@ -6,7 +6,6 @@ from tensorboardX import SummaryWriter
 from makeDatasetRGB import *
 import argparse
 import sys
-from torch.autograd import Variable
 
 DEVICE = "cuda"
 
@@ -167,8 +166,8 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
             train_iter += 1
             iterPerEpoch += 1
             optimizer_fn.zero_grad()
-            inputVariable = Variable(inputs.permute(1, 0, 2, 3, 4).to(DEVICE))
-            labelVariable = Variable(targets.to(DEVICE))
+            inputVariable = inputs.permute(1, 0, 2, 3, 4).to(DEVICE)
+            labelVariable = targets.to(DEVICE)
             trainSamples += inputs.size(0)
             output_label, _ = model(inputVariable)
             loss = loss_fn(output_label, labelVariable)
@@ -195,8 +194,8 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
             for j, (inputs, targets) in enumerate(val_loader):
                 val_iter += 1
                 val_samples += inputs.size(0)
-                inputVariable = Variable(inputs.permute(1, 0, 2, 3, 4).to(DEVICE))
-                labelVariable = Variable(targets.to(DEVICE))
+                inputVariable = inputs.permute(1, 0, 2, 3, 4).to(DEVICE)
+                labelVariable = targets.to(DEVICE)
                 output_label, _ = model(inputVariable)
                 val_loss = loss_fn(output_label, labelVariable)
                 val_loss_epoch += val_loss.data.item()

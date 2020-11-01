@@ -4,7 +4,6 @@ from spatial_transforms import (Compose, ToTensor, CenterCrop, Scale, Normalize,
 from tensorboardX import SummaryWriter
 import torch.nn as nn
 from twoStreamModel import *
-from torch.autograd import Variable
 from torch.utils.data.sampler import WeightedRandomSampler
 from makeDatasetTwoStream import *
 import argparse
@@ -140,9 +139,9 @@ def main_run(dataset, flowModel, rgbModel, stackSize, seqLen, memSize, trainData
             train_iter += 1
             iterPerEpoch += 1
             optimizer_fn.zero_grad()
-            inputVariableFlow = Variable(inputFlow.to(DEVICE))
-            inputVariableFrame = Variable(inputFrame.permute(1, 0, 2, 3, 4).to(DEVICE))
-            labelVariable = Variable(targets.to(DEVICE))
+            inputVariableFlow = inputFlow.to(DEVICE)
+            inputVariableFrame = inputFrame.permute(1, 0, 2, 3, 4).to(DEVICE)
+            labelVariable = targets.to(DEVICE)
             output_label = model(inputVariableFlow, inputVariableFrame)
             loss = loss_fn(torch.log_softmax(output_label, dim=1), labelVariable)
             loss.backward()
@@ -169,9 +168,9 @@ def main_run(dataset, flowModel, rgbModel, stackSize, seqLen, memSize, trainData
             numCorr = 0
             for j, (inputFlow, inputFrame, targets) in enumerate(val_loader):
                 val_iter += 1
-                inputVariableFlow = Variable(inputFlow.to(DEVICE))
-                inputVariableFrame = Variable(inputFrame.permute(1, 0, 2, 3, 4).to(DEVICE))
-                labelVariable = Variable(targets.to(DEVICE))
+                inputVariableFlow = inputFlow.to(DEVICE)
+                inputVariableFrame = inputFrame.permute(1, 0, 2, 3, 4).to(DEVICE)
+                labelVariable = targets.to(DEVICE)
                 output_label = model(inputVariableFlow, inputVariableFrame)
                 loss = loss_fn(torch.log_softmax(output_label, dim=1), labelVariable)
                 val_loss_epoch += loss.data.item()

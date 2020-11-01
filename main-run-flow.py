@@ -4,7 +4,6 @@ from spatial_transforms import (Compose, ToTensor, CenterCrop, Scale, Normalize,
                                 RandomHorizontalFlip)
 from tensorboardX import SummaryWriter
 import torch.nn as nn
-from torch.autograd import Variable
 from makeDatasetFlow import *
 import argparse
 import sys
@@ -86,8 +85,8 @@ def main_run(dataset, trainDir, valDir, outDir, stackSize, trainBatchSize, valBa
             train_iter += 1
             iterPerEpoch += 1
             optimizer_fn.zero_grad()
-            inputVariable = Variable(inputs.to(DEVICE))
-            labelVariable = Variable(targets.to(DEVICE))
+            inputVariable = inputs.to(DEVICE)
+            labelVariable = targets.to(DEVICE)
             trainSamples += inputs.size(0)
             output_label, _ = model(inputVariable)
             loss = loss_fn(output_label, labelVariable)
@@ -116,8 +115,8 @@ def main_run(dataset, trainDir, valDir, outDir, stackSize, trainBatchSize, valBa
             for j, (inputs, targets) in enumerate(val_loader):
                 val_iter += 1
                 val_samples += inputs.size(0)
-                inputVariable = Variable(inputs.to(DEVICE))
-                labelVariable = Variable(targets.to(DEVICE))
+                inputVariable = inputs.to(DEVICE)
+                labelVariable = targets.to(DEVICE)
                 output_label, _ = model(inputVariable)
                 val_loss = loss_fn(output_label, labelVariable)
                 val_loss_epoch += val_loss.data.item()
