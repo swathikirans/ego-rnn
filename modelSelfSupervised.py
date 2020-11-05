@@ -6,7 +6,7 @@ from MyConvLSTMCell import *
 from MotionSegmentationModule import *
 
 # TODO: handle this thing --> non è possibile avere il DEVICE passato così a cazzo di cane
-debug = False
+debug = True
 if debug:
     DEVICE = "cpu"
     n_workers = 0

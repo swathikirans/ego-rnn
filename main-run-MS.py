@@ -8,7 +8,13 @@ from makeDatasetMS import *
 import argparse
 import sys
 
-DEVICE = "cuda"
+debug = True
+if debug:
+    DEVICE = "cpu"
+    n_workers = 0
+else:
+    DEVICE = "cuda"
+    n_workers  = 4
 
 def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir, seqLen, trainBatchSize,
              valBatchSize, numEpochs, lr1, decay_factor, decay_step, memSize, CAM=True):
@@ -181,12 +187,14 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
             trainSamples += inputsRGB.size(0)
             output_label, _, output_ms = model(inputVariable)
             loss_c = loss_fn(output_label, labelVariable)
-            # print(loss_c)
             loss_ms = loss_ms_fn(torch.reshape(output_ms, (seqLen * 7 * 7, 2, output_ms.size(0))),
                                  torch.reshape(msVariable, (seqLen * 7 * 7, msVariable.size(0))).long())
-            # print(loss_ms)
             loss = loss_c + loss_ms
-            # print(loss)
+            if debug:
+                print(loss_c)
+                print(loss_ms)
+                print(loss)
+                print()
             # loss = loss_fn(output_label, labelVariable) + loss_ms_fn(output_ms, inputsMS) # TODO (forse): invertire 0 e 1 dim per inputsMS # output1 = F.softmax(torch.reshape(output_ms, (32, 7, 2, 7*7))[0, 0, :, :], dim=0)
             loss.backward()
             optimizer_fn.step()
@@ -210,7 +218,7 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
             val_iter = 0
             val_samples = 0
             numCorr = 0
-            for j, (inputs, inputsMS, targets) in enumerate(val_loader):
+            for j, (inputsRGB, inputsMS, targets) in enumerate(val_loader):
                 val_iter += 1
                 val_samples += inputsRGB.size(0)
                 inputVariable = inputsRGB.permute(1, 0, 2, 3, 4).to(DEVICE) # la permutazione è a solo scopo di computazione
