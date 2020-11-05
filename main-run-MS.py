@@ -1,13 +1,14 @@
 from __future__ import print_function, division
-from objectAttentionModelConvLSTM import *
+from modelSelfSupervised import *
 from spatial_transforms import (Compose, ToTensor, CenterCrop, Scale, Normalize, MultiScaleCornerCrop,
                                 RandomHorizontalFlip)
+from torchvision.transforms import Resize
 from tensorboardX import SummaryWriter
-from makeDatasetRGB import *
+from makeDatasetMS import *
 import argparse
 import sys
 
-DEVICE = "cuda"
+DEVICE = "cpu"
 
 def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir, seqLen, trainBatchSize,
              valBatchSize, numEpochs, lr1, decay_factor, decay_step, memSize, CAM=True):
@@ -38,21 +39,27 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
     spatial_transform = Compose([Scale(256),
                                  RandomHorizontalFlip(),
                                  MultiScaleCornerCrop([1, 0.875, 0.75, 0.65625], 224),
-                                 ToTensor(),
-                                 normalize])
+                                 # ToTensor(),
+                                 # normalize
+                                 ])
+    transform_rgb = Compose([ToTensor(), normalize])
+    transform_MS  = Compose([Resize((7, 7)), ToTensor()])
+
     vid_seq_train = makeDataset(train_data_dir, splits=train_splits,
                                 spatial_transform=spatial_transform,
+                                transform_rgb=transform_rgb,
+                                transform_MS=transform_MS,
                                 seqLen=seqLen, fmt='.png')
-
+    n_workers = 0 #4
     train_loader = torch.utils.data.DataLoader(vid_seq_train, batch_size=trainBatchSize,
-                                               shuffle=True, num_workers=4, pin_memory=True)
+                                               shuffle=True, num_workers=n_workers, pin_memory=True)
 
     vid_seq_val = makeDataset(train_data_dir, splits=val_splits,
                               spatial_transform=Compose([Scale(256), CenterCrop(224), ToTensor(), normalize]),
                               seqLen=seqLen, fmt='.png', verbose=False)
 
     val_loader = torch.utils.data.DataLoader(vid_seq_val, batch_size=valBatchSize,
-                                             shuffle=False, num_workers=4, pin_memory=True)
+                                             shuffle=False, num_workers=n_workers, pin_memory=True)
     valInstances = vid_seq_val.__len__()
 
     '''
@@ -66,60 +73,54 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
                                                  shuffle=False, num_workers=2, pin_memory=True)
         valInstances = vid_seq_val.__len__()
     '''
-
-
     trainInstances = vid_seq_train.__len__()
 
     train_params = []
-    if stage == 1:
-        model = attentionModel(num_classes=num_classes, mem_size=memSize)
-        model.train(False)
-        for params in model.parameters():
-            params.requires_grad = False
-    else:
 
-        model = attentionModel(num_classes=num_classes, mem_size=memSize)
-        model.load_state_dict(torch.load(stage1_dict))
-        model.train(False)
-        for params in model.parameters():
-            params.requires_grad = False
-        #
-        for params in model.resNet.layer4[0].conv1.parameters():
-            params.requires_grad = True
-            train_params += [params]
+    model = SelfSupervisedAttentionModel(num_classes=num_classes, mem_size=memSize)
 
-        for params in model.resNet.layer4[0].conv2.parameters():
-            params.requires_grad = True
-            train_params += [params]
+    model.train(False)
+    for params in model.parameters():
+        params.requires_grad = False
+    # Add all the parameters of the model
+    # ResNet feature extractor
+    for params in model.resNet.layer4[0].conv1.parameters():
+        params.requires_grad = True
+        train_params += [params]
 
-        for params in model.resNet.layer4[1].conv1.parameters():
-            params.requires_grad = True
-            train_params += [params]
+    for params in model.resNet.layer4[0].conv2.parameters():
+        params.requires_grad = True
+        train_params += [params]
 
-        for params in model.resNet.layer4[1].conv2.parameters():
-            params.requires_grad = True
-            train_params += [params]
+    for params in model.resNet.layer4[1].conv1.parameters():
+        params.requires_grad = True
+        train_params += [params]
 
-        for params in model.resNet.layer4[2].conv1.parameters():
-            params.requires_grad = True
-            train_params += [params]
-        #
-        for params in model.resNet.layer4[2].conv2.parameters():
-            params.requires_grad = True
-            train_params += [params]
-        #
-        for params in model.resNet.fc.parameters():
-            params.requires_grad = True
-            train_params += [params]
+    for params in model.resNet.layer4[1].conv2.parameters():
+        params.requires_grad = True
+        train_params += [params]
 
-        model.resNet.layer4[0].conv1.train(True)
-        model.resNet.layer4[0].conv2.train(True)
-        model.resNet.layer4[1].conv1.train(True)
-        model.resNet.layer4[1].conv2.train(True)
-        model.resNet.layer4[2].conv1.train(True)
-        model.resNet.layer4[2].conv2.train(True)
-        model.resNet.fc.train(True)
+    for params in model.resNet.layer4[2].conv1.parameters():
+        params.requires_grad = True
+        train_params += [params]
+    #
+    for params in model.resNet.layer4[2].conv2.parameters():
+        params.requires_grad = True
+        train_params += [params]
+    #
+    for params in model.resNet.fc.parameters():
+        params.requires_grad = True
+        train_params += [params]
 
+    model.resNet.layer4[0].conv1.train(True)
+    model.resNet.layer4[0].conv2.train(True)
+    model.resNet.layer4[1].conv1.train(True)
+    model.resNet.layer4[1].conv2.train(True)
+    model.resNet.layer4[2].conv1.train(True)
+    model.resNet.layer4[2].conv2.train(True)
+    model.resNet.fc.train(True)
+
+    # ConvLSTM parameters
     for params in model.lstm_cell.parameters():
         params.requires_grad = True
         train_params += [params]
@@ -128,14 +129,14 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
         params.requires_grad = True
         train_params += [params]
 
-
     model.lstm_cell.train(True)
 
     model.classifier.train(True)
     model.ms_module.train(True)
-    model.cuda()
+    model.to(DEVICE)
 
     loss_fn = nn.CrossEntropyLoss()
+    loss_ms_fn = nn.CrossEntropyLoss()  # TODO: check paper Planamente
 
     optimizer_fn = torch.optim.Adam(train_params, lr=lr1, weight_decay=4e-5, eps=1e-4)
 
@@ -146,35 +147,49 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
     min_accuracy = 0
 
     for epoch in range(numEpochs):
-        optim_scheduler.step()
         epoch_loss = 0
         numCorrTrain = 0
         trainSamples = 0
         iterPerEpoch = 0
-        model.lstm_cell.train(True)
-        model.classifier.train(True)
-        writer.add_scalar('lr', optimizer_fn.param_groups[0]['lr'], epoch+1)
-        if stage == 2:
-            model.resNet.layer4[0].conv1.train(True)
-            model.resNet.layer4[0].conv2.train(True)
-            model.resNet.layer4[1].conv1.train(True)
-            model.resNet.layer4[1].conv2.train(True)
-            model.resNet.layer4[2].conv1.train(True)
-            model.resNet.layer4[2].conv2.train(True)
-            model.resNet.fc.train(True)
-        for i, (inputs, targets) in enumerate(train_loader):
+        writer.add_scalar('lr', optimizer_fn.param_groups[0]['lr'], epoch + 1)
+
+        model.train(True)
+        # model.lstm_cell.train(True)
+        # model.classifier.train(True)
+        # model.resNet.layer4[0].conv1.train(True)
+        # model.resNet.layer4[0].conv2.train(True)
+        # model.resNet.layer4[1].conv1.train(True)
+        # model.resNet.layer4[1].conv2.train(True)
+        # model.resNet.layer4[2].conv1.train(True)
+        # model.resNet.layer4[2].conv2.train(True)
+        # model.resNet.fc.train(True)
+        for i, (inputsRGB, inputsMS, targets) in enumerate(train_loader):
+            # Inputs:
+            #   - inputsRGB : the rgb frame input
+            # Labels :
+            #   - inputsMS  : the motion task label
+            #   - targets   : output
+
             train_iter += 1
             iterPerEpoch += 1
             optimizer_fn.zero_grad()
-            inputVariable = inputs.permute(1, 0, 2, 3, 4).to(DEVICE)
+            inputVariable = inputsRGB.permute(1, 0, 2, 3, 4).to(DEVICE)
             labelVariable = targets.to(DEVICE)
-            trainSamples += inputs.size(0)
-            output_label, _ = model(inputVariable)
-            loss = loss_fn(output_label, labelVariable)
+            msVariable = inputsMS.to(DEVICE)
+            trainSamples += inputsRGB.size(0)
+            output_label, _, output_ms = model(inputVariable)
+            loss_c = loss_fn(output_label, labelVariable)
+            # print(loss_c)
+            loss_ms = loss_ms_fn(torch.reshape(output_ms, (seqLen * 7 * 7, 2, output_ms.size(0))),
+                                 torch.reshape(msVariable, (seqLen * 7 * 7, msVariable.size(0))).long())
+            # print(loss_ms)
+            loss = loss_c + loss_ms
+            # print(loss)
+            # loss = loss_fn(output_label, labelVariable) + loss_ms_fn(output_ms, inputsMS) # TODO (forse): invertire 0 e 1 dim per inputsMS # output1 = F.softmax(torch.reshape(output_ms, (32, 7, 2, 7*7))[0, 0, :, :], dim=0)
             loss.backward()
             optimizer_fn.step()
             _, predicted = torch.max(output_label.data, 1)
-            numCorrTrain += (predicted == targets.cuda()).sum()
+            numCorrTrain += (predicted == targets.to(DEVICE)).sum()
             epoch_loss += loss.data.item()
         avg_loss = epoch_loss/iterPerEpoch
         trainAccuracy = (numCorrTrain.data.item() / trainSamples) * 100
@@ -184,6 +199,8 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
         print('Train: Epoch = {} | Loss = {} | Accuracy = {}'.format(epoch+1, avg_loss, trainAccuracy))
         writer.add_scalar('train/epoch_loss', avg_loss, epoch+1)
         writer.add_scalar('train/accuracy', trainAccuracy, epoch+1)
+
+        # VALIDATION PHASE
         #if val_data_dir is not None:
         if (epoch+1) % 1 == 0:
             model.train(False)
@@ -191,16 +208,21 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
             val_iter = 0
             val_samples = 0
             numCorr = 0
-            for j, (inputs, targets) in enumerate(val_loader):
+            for j, (inputs, inputsMS, targets) in enumerate(val_loader):
                 val_iter += 1
-                val_samples += inputs.size(0)
-                inputVariable = inputs.permute(1, 0, 2, 3, 4).to(DEVICE)
+                val_samples += inputsRGB.size(0)
+                inputVariable = inputsRGB.permute(1, 0, 2, 3, 4).to(DEVICE) # la permutazione è a solo scopo di computazione
                 labelVariable = targets.to(DEVICE)
-                output_label, _ = model(inputVariable)
-                val_loss = loss_fn(output_label, labelVariable)
+                msVariable = inputsMS.to(DEVICE)
+                output_label, _, output_ms = model(inputVariable)
+                loss_c = loss_fn(output_label, labelVariable)
+                loss_ms = loss_ms_fn(torch.reshape(output_ms, (seqLen * 7 * 7, 2, output_ms.size(0))),
+                                 torch.reshape(msVariable, (seqLen * 7 * 7, msVariable.size(0))).long())
+                val_loss = loss_c + loss_ms
+                # val_loss = loss_fn(output_label, labelVariable) # TODO: add ms Loss
                 val_loss_epoch += val_loss.data.item()
                 _, predicted = torch.max(output_label.data, 1)
-                numCorr += (predicted == targets.cuda()).sum()
+                numCorr += (predicted == targets.to(DEVICE)).sum()
             val_accuracy = (numCorr.data.item() / val_samples) * 100
             avg_val_loss = val_loss_epoch / val_iter
             print('Valid: Epoch = {} | Loss {} | Accuracy = {}'.format(epoch + 1, avg_val_loss, val_accuracy))
@@ -217,6 +239,8 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
                     save_path_model = (model_folder + '/model_rgb_state_dict_epoch' + str(epoch+1) + '.pth')
                     torch.save(model.state_dict(), save_path_model)
                 '''
+        optim_scheduler.step()
+
 
     train_log_loss.close()
     train_log_acc.close()

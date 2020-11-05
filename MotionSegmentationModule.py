@@ -16,7 +16,8 @@ class MotionSegmentationModule(nn.Module):
     def forward(self, x):
         x = F.relu(x)
         x = self.conv1(x)
-        x = torch.flatten(x)
+        x = torch.flatten(x, 1)
         x = self.fc1(x)
-        x = torch.reshape(x, (2, 7, 7))  # Dimension 0 is 2 because we are performing a classification task
+        print(x.size())
+        # x = torch.reshape(x, (x.size(0), 2 * 7 * 7))  # Dimension 0 is 2 because we are performing a classification task
         return x

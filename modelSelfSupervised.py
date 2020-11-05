@@ -5,10 +5,12 @@ from torch.nn import functional as F
 from MyConvLSTMCell import *
 from MotionSegmentationModule import *
 
+# TODO: handle this thing --> non è possibile avere il DEVICE passato così a cazzo di cane
+DEVICE = "cpu"
 
-class attentionModel(nn.Module):
+class SelfSupervisedAttentionModel(nn.Module):
     def __init__(self, num_classes=61, mem_size=512, cam=True):
-        super(attentionModel, self).__init__()
+        super(SelfSupervisedAttentionModel, self).__init__()
         self.num_classes = num_classes
         self.resNet = resnetMod.resnet34(True, True)
         self.mem_size = mem_size
@@ -23,14 +25,14 @@ class attentionModel(nn.Module):
         self.ms_module = MotionSegmentationModule(512)
 
     def forward(self, inputVariable):
-        state = (torch.zeros((inputVariable.size(1), self.mem_size, 7, 7)).cuda(),
-                 torch.zeros((inputVariable.size(1), self.mem_size, 7, 7)).cuda())
+        state = (torch.zeros((inputVariable.size(1), self.mem_size, 7, 7)).to(DEVICE),
+                 torch.zeros((inputVariable.size(1), self.mem_size, 7, 7)).to(DEVICE))
         feats_ms = []
 
         for t in range(inputVariable.size(0)):
             logit, feature_conv, feature_convNBN = self.resNet(inputVariable[t])
             bz, nc, h, w = feature_conv.size()
-            print(feature_conv.size())
+            #print(feature_conv.size())
             # bz : ??
             # nc : num channels (?)
             # h  : height
@@ -40,7 +42,7 @@ class attentionModel(nn.Module):
             probs, idxs = logit.sort(1, True)
 
             # MS self-supervised task
-            feats_ms.append(self.ms_module(feature_conv1))
+            feats_ms.append(self.ms_module(feature_conv))
 
             if self.cam:
                 # Attention layer
@@ -57,6 +59,7 @@ class attentionModel(nn.Module):
         feats1 = self.avgpool(state[1]).view(state[1].size(0), -1)
         feats = self.classifier(feats1)
 
-        feats_ms = torch.stack()
+        feats_ms = torch.stack(feats_ms, 0).permute(1, 0, 2)
+        #feats_ms = feats_ms.view(bz, inputVariable.size(0), 49)
 
-        return feats, feats1
+        return feats, feats1, feats_ms
