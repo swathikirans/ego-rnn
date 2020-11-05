@@ -43,7 +43,7 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
                                  # normalize
                                  ])
     transform_rgb = Compose([ToTensor(), normalize])
-    transform_MS  = Compose([Resize((7, 7)), ToTensor()])
+    transform_MS = Compose([Resize((7, 7)), ToTensor()])
 
     vid_seq_train = makeDataset(train_data_dir, splits=train_splits,
                                 spatial_transform=spatial_transform,
@@ -55,7 +55,9 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
                                                shuffle=True, num_workers=n_workers, pin_memory=True)
 
     vid_seq_val = makeDataset(train_data_dir, splits=val_splits,
-                              spatial_transform=Compose([Scale(256), CenterCrop(224), ToTensor(), normalize]),
+                              spatial_transform=Compose([Scale(256), CenterCrop(224)]),
+                              transform_rgb = transform_rgb,
+                              transform_MS = transform_MS,
                               seqLen=seqLen, fmt='.png', verbose=False)
 
     val_loader = torch.utils.data.DataLoader(vid_seq_val, batch_size=valBatchSize,

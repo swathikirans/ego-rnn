@@ -18,6 +18,6 @@ class MotionSegmentationModule(nn.Module):
         x = self.conv1(x)
         x = torch.flatten(x, 1)
         x = self.fc1(x)
-        print(x.size())
+        # print(x.size())
         # x = torch.reshape(x, (x.size(0), 2 * 7 * 7))  # Dimension 0 is 2 because we are performing a classification task
         return x
