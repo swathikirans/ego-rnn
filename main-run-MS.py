@@ -8,7 +8,7 @@ from makeDatasetMS import *
 import argparse
 import sys
 
-DEVICE = "cpu"
+DEVICE = "cuda"
 
 def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir, seqLen, trainBatchSize,
              valBatchSize, numEpochs, lr1, decay_factor, decay_step, memSize, CAM=True):

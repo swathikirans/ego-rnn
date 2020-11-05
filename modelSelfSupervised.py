@@ -6,7 +6,7 @@ from MyConvLSTMCell import *
 from MotionSegmentationModule import *
 
 # TODO: handle this thing --> non è possibile avere il DEVICE passato così a cazzo di cane
-DEVICE = "cpu"
+DEVICE = "cuda"
 
 class SelfSupervisedAttentionModel(nn.Module):
     def __init__(self, num_classes=61, mem_size=512, cam=True):
