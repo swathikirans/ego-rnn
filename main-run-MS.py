@@ -8,7 +8,7 @@ from makeDatasetMS import *
 import argparse
 import sys
 
-debug = True
+debug = False
 if debug:
     DEVICE = "cpu"
     n_workers = 0
