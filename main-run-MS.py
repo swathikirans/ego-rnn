@@ -92,7 +92,7 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
     else:
 
         model = SelfSupervisedAttentionModel(num_classes=num_classes, mem_size=memSize)
-        model.load_state_dict(torch.load(stage1_dict))
+        model.load_state_dict(torch.load(stage1_dict), strict=False)
         model.train(False)
         for params in model.parameters():
             params.requires_grad = False
