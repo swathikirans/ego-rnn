@@ -5,15 +5,6 @@ from torch.nn import functional as F
 from MyConvLSTMCell import *
 from MotionSegmentationModule import *
 
-# TODO: handle this thing --> non è possibile avere il DEVICE passato così a cazzo di cane
-debug = False
-if debug:
-    DEVICE = "cpu"
-    n_workers = 0
-else:
-    DEVICE = "cuda"
-    n_workers  = 4
-
 class SelfSupervisedAttentionModel(nn.Module):
     def __init__(self, num_classes=61, mem_size=512, cam=True):
         super(SelfSupervisedAttentionModel, self).__init__()
@@ -30,9 +21,9 @@ class SelfSupervisedAttentionModel(nn.Module):
         # Motion Segmentation Module
         self.ms_module = MotionSegmentationModule(512)
 
-    def forward(self, inputVariable):
-        state = (torch.zeros((inputVariable.size(1), self.mem_size, 7, 7)).to(DEVICE),
-                 torch.zeros((inputVariable.size(1), self.mem_size, 7, 7)).to(DEVICE))
+    def forward(self, inputVariable, device='cuda'):
+        state = (torch.zeros((inputVariable.size(1), self.mem_size, 7, 7)).to(device),
+                 torch.zeros((inputVariable.size(1), self.mem_size, 7, 7)).to(device))
         feats_ms = []
 
         for t in range(inputVariable.size(0)):

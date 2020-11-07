@@ -8,22 +8,21 @@ from makeDatasetMS import *
 import argparse
 import sys
 
-debug = False
-if debug:
-    DEVICE = "cpu"
-    n_workers = 0
-else:
-    DEVICE = "cuda"
-    n_workers  = 4
-
 def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir, seqLen, trainBatchSize,
-             valBatchSize, numEpochs, lr1, decay_factor, decay_step, memSize, CAM=True):
+             valBatchSize, numEpochs, lr1, decay_factor, decay_step, memSize,  debug, verbose, CAM=True):
     # GTEA 61
     num_classes = 61
 
     # Train/Validation/Test split
     train_splits = ["S1", "S3", "S4"]
     val_splits = ["S2"]
+
+    if debug:
+        n_workers = 0
+        device = 'cpu'
+    else:
+        n_workers = 4
+        device = 'cuda'
 
 
     model_folder = os.path.join('./', out_dir, dataset, 'rgb', 'stage'+str(stage))  # Dir for saving models and log files
@@ -56,7 +55,7 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
                                 transform_rgb=transform_rgb,
                                 transform_MS=transform_MS,
                                 seqLen=seqLen, fmt='.png')
-    n_workers = 0 #4
+
     train_loader = torch.utils.data.DataLoader(vid_seq_train, batch_size=trainBatchSize,
                                                shuffle=True, num_workers=n_workers, pin_memory=True)
 
@@ -141,7 +140,7 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
 
     model.classifier.train(True)
     model.ms_module.train(True)
-    model.to(DEVICE)
+    model.to(device)
 
     loss_fn = nn.CrossEntropyLoss()
     loss_ms_fn = nn.CrossEntropyLoss()  # TODO: check paper Planamente
@@ -181,16 +180,16 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
             train_iter += 1
             iterPerEpoch += 1
             optimizer_fn.zero_grad()
-            inputVariable = inputsRGB.permute(1, 0, 2, 3, 4).to(DEVICE)
-            labelVariable = targets.to(DEVICE)
-            msVariable = inputsMS.to(DEVICE)
+            inputVariable = inputsRGB.permute(1, 0, 2, 3, 4).to(device)
+            labelVariable = targets.to(device)
+            msVariable = inputsMS.to(device)
             trainSamples += inputsRGB.size(0)
             output_label, _, output_ms = model(inputVariable)
             loss_c = loss_fn(output_label, labelVariable)
             loss_ms = loss_ms_fn(torch.reshape(output_ms, (seqLen * 7 * 7, 2, output_ms.size(0))),
                                  torch.reshape(msVariable, (seqLen * 7 * 7, msVariable.size(0))).long())
             loss = loss_c + loss_ms
-            if debug:
+            if verbose:
                 print(loss_c)
                 print(loss_ms)
                 print(loss)
@@ -199,7 +198,7 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
             loss.backward()
             optimizer_fn.step()
             _, predicted = torch.max(output_label.data, 1)
-            numCorrTrain += (predicted == targets.to(DEVICE)).sum()
+            numCorrTrain += (predicted == targets.to(device)).sum()
             epoch_loss += loss.data.item()
         avg_loss = epoch_loss/iterPerEpoch
         trainAccuracy = (numCorrTrain.data.item() / trainSamples) * 100
@@ -221,9 +220,9 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
             for j, (inputsRGB, inputsMS, targets) in enumerate(val_loader):
                 val_iter += 1
                 val_samples += inputsRGB.size(0)
-                inputVariable = inputsRGB.permute(1, 0, 2, 3, 4).to(DEVICE) # la permutazione è a solo scopo di computazione
-                labelVariable = targets.to(DEVICE)
-                msVariable = inputsMS.to(DEVICE)
+                inputVariable = inputsRGB.permute(1, 0, 2, 3, 4).to(device) # la permutazione è a solo scopo di computazione
+                labelVariable = targets.to(device)
+                msVariable = inputsMS.to(device)
                 output_label, _, output_ms = model(inputVariable)
                 loss_c = loss_fn(output_label, labelVariable)
                 loss_ms = loss_ms_fn(torch.reshape(output_ms, (seqLen * 7 * 7, 2, output_ms.size(0))),
@@ -232,7 +231,7 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
                 # val_loss = loss_fn(output_label, labelVariable) # TODO: add ms Loss
                 val_loss_epoch += val_loss.data.item()
                 _, predicted = torch.max(output_label.data, 1)
-                numCorr += (predicted == targets.to(DEVICE)).sum()
+                numCorr += (predicted == targets.to(device)).sum()
             val_accuracy = (numCorr.data.item() / val_samples) * 100
             avg_val_loss = val_loss_epoch / val_iter
             print('Valid: Epoch = {} | Loss {} | Accuracy = {}'.format(epoch + 1, avg_val_loss, val_accuracy))
@@ -279,7 +278,11 @@ def __main__():
     parser.add_argument('--stepSize', type=float, default=[25, 75, 150], nargs="+", help='Learning rate decay step')
     parser.add_argument('--decayRate', type=float, default=0.1, help='Learning rate decay rate')
     parser.add_argument('--memSize', type=int, default=512, help='ConvLSTM hidden state size')
-    parser.add_argument('--CAM', type=str, default='y', help='C Attention Maps')
+    parser.add_argument('--debug', action="store_true")
+    parser.add_argument('--verbose', action="store_true")
+    parser.add_argument('--CAM', action="store_true", help='C Attention Maps')
+    # TODO: check if it works and modify other main-*.py
+
 
     args = parser.parse_args()
 
@@ -297,9 +300,11 @@ def __main__():
     stepSize = args.stepSize
     decayRate = args.decayRate
     memSize = args.memSize
-    CAM = args.CAM == 'y'
+    debug = args.debug
+    verbose = args.verbose
+    CAM = args.CAM
 
     main_run(dataset, stage, trainDatasetDir, valDatasetDir, stage1Dict, outDir, seqLen, trainBatchSize,
-             valBatchSize, numEpochs, lr1, decayRate, stepSize, memSize, CAM)
+             valBatchSize, numEpochs, lr1, decayRate, stepSize, memSize, debug, verbose, CAM)
 
 __main__()
