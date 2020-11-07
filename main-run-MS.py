@@ -3,7 +3,6 @@ from modelSelfSupervised import *
 from spatial_transforms import (Compose, ToTensor, CenterCrop, Scale, Normalize, MultiScaleCornerCrop,
                                 RandomHorizontalFlip)
 from torchvision.transforms import Resize
-from tensorboardX import SummaryWriter
 from makeDatasetMS import *
 import argparse
 import sys
@@ -33,7 +32,6 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
     os.makedirs(model_folder)
 
     # Log files
-    writer = SummaryWriter(model_folder)
     train_log_loss = open((model_folder + '/train_log_loss.txt'), 'w')
     train_log_acc = open((model_folder + '/train_log_acc.txt'), 'w')
     val_log_loss = open((model_folder + '/val_log_loss.txt'), 'w')
@@ -168,7 +166,6 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
         numCorrTrain = 0
         trainSamples = 0
         iterPerEpoch = 0
-        writer.add_scalar('lr', optimizer_fn.param_groups[0]['lr'], epoch + 1)
 
         #model.train(True)
         model.lstm_cell.train(True)
@@ -220,8 +217,6 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
         train_log_loss.write('Training loss after {} epoch = {}\n'.format(epoch + 1, avg_loss))
         train_log_acc.write('Training accuracy after {} epoch = {}\n'.format(epoch + 1, trainAccuracy))
         print('Train: Epoch = {} | Loss = {} | Accuracy = {}'.format(epoch+1, avg_loss, trainAccuracy))
-        writer.add_scalar('train/epoch_loss', avg_loss, epoch+1)
-        writer.add_scalar('train/accuracy', trainAccuracy, epoch+1)
 
         # VALIDATION PHASE
         #if val_data_dir is not None:
@@ -249,8 +244,7 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
             val_accuracy = (numCorr.data.item() / val_samples) * 100
             avg_val_loss = val_loss_epoch / val_iter
             print('Valid: Epoch = {} | Loss {} | Accuracy = {}'.format(epoch + 1, avg_val_loss, val_accuracy))
-            writer.add_scalar('val/epoch_loss', avg_val_loss, epoch + 1)
-            writer.add_scalar('val/accuracy', val_accuracy, epoch + 1)
+
             val_log_loss.write('Val Loss after {} epochs = {}\n'.format(epoch + 1, avg_val_loss))
             val_log_acc.write('Val Accuracy after {} epochs = {}%\n'.format(epoch + 1, val_accuracy))
             if val_accuracy > min_accuracy:
@@ -269,8 +263,6 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
     train_log_acc.close()
     val_log_acc.close()
     val_log_loss.close()
-    writer.export_scalars_to_json(model_folder + "/all_scalars.json")
-    writer.close()
 
 
 def __main__():
