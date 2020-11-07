@@ -1,7 +1,6 @@
 from __future__ import print_function, division
 from spatial_transforms import (Compose, ToTensor, CenterCrop, Scale, Normalize, MultiScaleCornerCrop,
                                 RandomHorizontalFlip)
-from tensorboardX import SummaryWriter
 import torch.nn as nn
 from twoStreamModel import *
 from torch.utils.data.sampler import WeightedRandomSampler
@@ -30,7 +29,6 @@ def main_run(dataset, flowModel, rgbModel, stackSize, seqLen, memSize, trainData
     os.makedirs(model_folder)
 
     # Log files
-    writer = SummaryWriter(model_folder)
     train_log_loss = open((model_folder + '/train_log_loss.txt'), 'w')
     train_log_acc = open((model_folder + '/train_log_acc.txt'), 'w')
     val_log_loss = open((model_folder + '/val_log_loss.txt'), 'w')
@@ -154,8 +152,6 @@ def main_run(dataset, flowModel, rgbModel, stackSize, seqLen, memSize, trainData
         trainAccuracy = (numCorrTrain.item() / trainSamples) * 100
         print('Average training loss after {} epoch = {} '.format(epoch + 1, avg_loss))
         print('Training accuracy after {} epoch = {}% '.format(epoch + 1, trainAccuracy))
-        writer.add_scalar('train/epoch_loss', avg_loss, epoch + 1)
-        writer.add_scalar('train/accuracy', trainAccuracy, epoch + 1)
         train_log_loss.write('Training loss after {} epoch = {}\n'.format(epoch + 1, avg_loss))
         train_log_acc.write('Training accuracy after {} epoch = {}\n'.format(epoch + 1, trainAccuracy))
 
@@ -180,8 +176,6 @@ def main_run(dataset, flowModel, rgbModel, stackSize, seqLen, memSize, trainData
             avg_val_loss = val_loss_epoch / val_iter
             print('Val Loss after {} epochs, loss = {}'.format(epoch + 1, avg_val_loss))
             print('Val Accuracy after {} epochs = {}%'.format(epoch + 1, val_accuracy))
-            writer.add_scalar('val/epoch_loss', avg_val_loss, epoch + 1)
-            writer.add_scalar('val/accuracy', val_accuracy, epoch + 1)
             val_log_loss.write('Val Loss after {} epochs = {}\n'.format(epoch + 1, avg_val_loss))
             val_log_acc.write('Val Accuracy after {} epochs = {}%\n'.format(epoch + 1, val_accuracy))
             if val_accuracy > min_accuracy:
@@ -199,8 +193,6 @@ def main_run(dataset, flowModel, rgbModel, stackSize, seqLen, memSize, trainData
     train_log_acc.close()
     val_log_acc.close()
     val_log_loss.close()
-    writer.export_scalars_to_json(model_folder + "/all_scalars.json")
-    writer.close()
 
 
 def __main__():
