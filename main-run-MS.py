@@ -294,7 +294,7 @@ def __main__():
     parser.add_argument('--memSize', type=int, default=512, help='ConvLSTM hidden state size')
     parser.add_argument('--debug', action="store_true")
     parser.add_argument('--verbose', action="store_true")
-    parser.add_argument('--CAM', action="store_true", help='C Attention Maps')
+    parser.add_argument('--CAM', type=str, default='y', help='C Attention Maps')
     # TODO: check if it works and modify other main-*.py
 
 
@@ -316,7 +316,7 @@ def __main__():
     memSize = args.memSize
     debug = args.debug
     verbose = args.verbose
-    CAM = args.CAM
+    CAM = ( args.CAM == 'y' )
 
     main_run(dataset, stage, trainDatasetDir, valDatasetDir, stage1Dict, outDir, seqLen, trainBatchSize,
              valBatchSize, numEpochs, lr1, decayRate, stepSize, memSize, debug, verbose, CAM)
