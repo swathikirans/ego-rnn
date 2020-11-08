@@ -49,7 +49,8 @@ class makeDataset(Dataset): # TODO: refactor makeDatasetMS ??
                  seqLen=20,
                  train=True,
                  fmt='.png',
-                 verbose=False):
+                 verbose=False,
+                 regression=False):
         self.imagesF, self.imagesMS, \
             self.labels, self.numFramesF, \
             self.numFramesMS = gen_split(root_dir, splits, stack_size)
@@ -60,6 +61,7 @@ class makeDataset(Dataset): # TODO: refactor makeDatasetMS ??
         self.seqLen = seqLen
         self.fmt = fmt
         self.verbose = verbose
+        self.regression = regression
 
     def __len__(self):
         return len(self.imagesF)
@@ -107,11 +109,17 @@ class makeDataset(Dataset): # TODO: refactor makeDatasetMS ??
                             break
                         #else:
                         #    print(fl_name, " does not exists")
-            img = Image.open(fl_name).convert('1')
+            img = Image.open(fl_name)
+            if self.regression:         # regression task
+                # convert the image using grey scale
+                img = img.convert('L')
+            else:                       # classification task
+                # convert the image into a binary 0-1 scale
+                img = img.convert('1')
             img = self.spatial_transform(img)           # Data Augmentation
             inpSeqMS.append(
                 transforms.ToTensor()(
-                    transforms.Resize((7,7))(img)
+                    transforms.Resize((7, 7))(img)
                 )
             ) # Resize 7x7 and ToTensor 1x7x7
 

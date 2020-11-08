@@ -1,14 +1,19 @@
 from __future__ import print_function, division
+import torch
+import torch.nn as nn
+
 from modelSelfSupervised import *
 from spatial_transforms import (Compose, ToTensor, CenterCrop, Scale, Normalize, MultiScaleCornerCrop,
                                 RandomHorizontalFlip)
 from torchvision.transforms import Resize
+
 from makeDatasetMS import *
 import argparse
 import sys
+# import wandb
 
 def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir, seqLen, trainBatchSize,
-             valBatchSize, numEpochs, lr1, decay_factor, decay_step, memSize,  debug, verbose, CAM=True):
+             valBatchSize, numEpochs, lr1, decay_factor, decay_step, memSize,  regression, debug, verbose, CAM):
     # GTEA 61
     num_classes = 61
 
@@ -52,7 +57,9 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
                                 spatial_transform=spatial_transform,
                                 transform_rgb=transform_rgb,
                                 transform_MS=transform_MS,
-                                seqLen=seqLen, fmt='.png')
+                                seqLen=seqLen,
+                                fmt='.png',
+                                regression=regression)
 
     train_loader = torch.utils.data.DataLoader(vid_seq_train, batch_size=trainBatchSize,
                                                shuffle=True, num_workers=n_workers, pin_memory=True)
@@ -61,7 +68,10 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
                               spatial_transform=Compose([Scale(256), CenterCrop(224)]),
                               transform_rgb = transform_rgb,
                               transform_MS = transform_MS,
-                              seqLen=seqLen, fmt='.png', verbose=False)
+                              seqLen=seqLen,
+                              fmt='.png',
+                              regression=regression,
+                              verbose=False)
 
     val_loader = torch.utils.data.DataLoader(vid_seq_val, batch_size=valBatchSize,
                                              shuffle=False, num_workers=n_workers, pin_memory=True)
@@ -82,14 +92,19 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
 
     train_params = []
     if stage == 1:
-
-        model = SelfSupervisedAttentionModel(num_classes=num_classes, mem_size=memSize)
+        if regression:
+            model = SelfSupervisedAttentionModel(num_classes=num_classes, mem_size=memSize, n_channels=1)
+        else:
+            model = SelfSupervisedAttentionModel(num_classes=num_classes, mem_size=memSize)
         model.train(False)
         for params in model.parameters():
             params.requires_grad = False
     else:
+        if regression:
+            model = SelfSupervisedAttentionModel(num_classes=num_classes, mem_size=memSize, n_channels=1)
+        else:
+            model = SelfSupervisedAttentionModel(num_classes=num_classes, mem_size=memSize)
 
-        model = SelfSupervisedAttentionModel(num_classes=num_classes, mem_size=memSize)
         model.load_state_dict(torch.load(stage1_dict), strict=False)
         model.train(False)
         for params in model.parameters():
@@ -150,8 +165,14 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
     model.ms_module.train(True)
     model.to(device)
 
+    # wandb.init(project="first_person_action_recognition")
+
     loss_fn = nn.CrossEntropyLoss()
-    loss_ms_fn = nn.CrossEntropyLoss()  # TODO: check paper Planamente
+    if regression:
+        loss_ms_fn = nn.MSELoss() # it should work
+    else:
+        # classification
+        loss_ms_fn = nn.CrossEntropyLoss()  # TODO: check paper Planamente
 
     optimizer_fn = torch.optim.Adam(train_params, lr=lr1, weight_decay=4e-5, eps=1e-4)
 
@@ -195,10 +216,18 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
             labelVariable = targets.to(device)
             msVariable = inputsMS.to(device)
             trainSamples += inputsRGB.size(0)
-            output_label, _, output_ms = model(inputVariable)
+            output_label, _, output_ms = model(inputVariable, device)
             loss_c = loss_fn(output_label, labelVariable)
-            loss_ms = loss_ms_fn(torch.reshape(output_ms, (seqLen * 7 * 7, 2, output_ms.size(0))),
-                                 torch.reshape(msVariable, (seqLen * 7 * 7, msVariable.size(0))).long())
+            if regression:
+                msVariable = torch.reshape(msVariable, (seqLen * 7 * 7, msVariable.size(0)))
+                output_ms = torch.sigmoid(output_ms)
+                output_ms = torch.reshape(output_ms, (seqLen * 7 * 7, output_ms.size(0)))
+            else:
+                # classification task
+                msVariable = torch.reshape(msVariable, (seqLen * 7 * 7, msVariable.size(0))).long()
+                output_ms = torch.reshape(output_ms, (seqLen * 7 * 7, 2, output_ms.size(0)))  #
+
+            loss_ms = loss_ms_fn(output_ms, msVariable)
             loss = loss_c + loss_ms
             if verbose:
                 print(loss_c)
@@ -232,10 +261,17 @@ def main_run(dataset, stage, train_data_dir, val_data_dir, stage1_dict, out_dir,
                 inputVariable = inputsRGB.permute(1, 0, 2, 3, 4).to(device) # la permutazione è a solo scopo di computazione
                 labelVariable = targets.to(device)
                 msVariable = inputsMS.to(device)
-                output_label, _, output_ms = model(inputVariable)
+                output_label, _, output_ms = model(inputVariable, device)
                 loss_c = loss_fn(output_label, labelVariable)
-                loss_ms = loss_ms_fn(torch.reshape(output_ms, (seqLen * 7 * 7, 2, output_ms.size(0))),
-                                 torch.reshape(msVariable, (seqLen * 7 * 7, msVariable.size(0))).long())
+                if regression:
+                    msVariable = torch.reshape(msVariable, (seqLen * 7 * 7, msVariable.size(0)))
+                    output_ms = torch.sigmoid(output_ms)
+                    output_ms = torch.reshape(output_ms, (seqLen * 7 * 7, output_ms.size(0)))
+                else:
+                    # classification task
+                    msVariable = torch.reshape(msVariable, (seqLen * 7 * 7, msVariable.size(0))).long()
+                    output_ms = torch.reshape(output_ms, (seqLen * 7 * 7, 2, output_ms.size(0)))
+                loss_ms = loss_ms_fn(output_ms, msVariable)
                 val_loss = loss_c + loss_ms
                 # val_loss = loss_fn(output_label, labelVariable) # TODO: add ms Loss
                 val_loss_epoch += val_loss.data.item()
@@ -284,6 +320,7 @@ def __main__():
     parser.add_argument('--stepSize', type=float, default=[25, 75, 150], nargs="+", help='Learning rate decay step')
     parser.add_argument('--decayRate', type=float, default=0.1, help='Learning rate decay rate')
     parser.add_argument('--memSize', type=int, default=512, help='ConvLSTM hidden state size')
+    parser.add_argument('--regression', action="store_true")
     parser.add_argument('--debug', action="store_true")
     parser.add_argument('--verbose', action="store_true")
     parser.add_argument('--CAM', type=str, default='y', help='C Attention Maps')
@@ -306,11 +343,12 @@ def __main__():
     stepSize = args.stepSize
     decayRate = args.decayRate
     memSize = args.memSize
+    regression = args.regression
     debug = args.debug
     verbose = args.verbose
     CAM = ( args.CAM == 'y' )
 
     main_run(dataset, stage, trainDatasetDir, valDatasetDir, stage1Dict, outDir, seqLen, trainBatchSize,
-             valBatchSize, numEpochs, lr1, decayRate, stepSize, memSize, debug, verbose, CAM)
+             valBatchSize, numEpochs, lr1, decayRate, stepSize, memSize, regression, debug, verbose, CAM)
 
 __main__()

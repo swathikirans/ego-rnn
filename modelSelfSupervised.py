@@ -6,7 +6,7 @@ from MyConvLSTMCell import *
 from MotionSegmentationModule import *
 
 class SelfSupervisedAttentionModel(nn.Module):
-    def __init__(self, num_classes=61, mem_size=512, cam=True):
+    def __init__(self, num_classes=61, mem_size=512, cam=True, n_channels=2):
         super(SelfSupervisedAttentionModel, self).__init__()
         self.num_classes = num_classes
         self.resNet = resnetMod.resnet34(True, True)
@@ -19,7 +19,7 @@ class SelfSupervisedAttentionModel(nn.Module):
         self.classifier = nn.Sequential(self.dropout, self.fc)
         self.cam = cam
         # Motion Segmentation Module
-        self.ms_module = MotionSegmentationModule(512)
+        self.ms_module = MotionSegmentationModule(512, n_channels=n_channels)
 
     def forward(self, inputVariable, device='cuda'):
         state = (torch.zeros((inputVariable.size(1), self.mem_size, 7, 7)).to(device),
